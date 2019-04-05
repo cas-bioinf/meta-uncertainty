@@ -43,7 +43,7 @@ sample_posterior_dm_all <- function(N, observed_matrix, N_draws = max(rowSums(ob
 
 #FUN takes a vector of values for single observation and returns a single number
 summarise_posterior_per_observation <- function(posterior, FUN) {
-  apply(posterior, MARGIN = c(1, 3), FUN = FUN)
+  t(apply(posterior, MARGIN = c(1, 2), FUN = FUN))
 }
 
 #FUN takes a matrix of values for all observation and returns a vector number

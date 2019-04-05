@@ -7,14 +7,17 @@ library(tidyverse)
 library(here)
 library(vegan)
 library(cowplot)
+source(here("R","sample_posterior.R"))
 ```
 Tijana's code to load the data
 ```{r}
-otutable = read.delim(file = here("tijana",'Seedlings_ITS2_otutab_ALL.csv'), sep = "\t") #reading the data I want to use
+otutable = read.delim(file = here("private_data","tijana",'Seedlings_ITS2_otutab_ALL.csv'), sep = "\t") #reading the data I want to use
 otutabP = otutable[, -1]
 rownames(otutabP) = otutable [, 1]
 
-mapping = read.delim(file = here("tijana","Seedlings_ITS2_year1_mapping.csv"), sep = ",") %>%
+t_otutab <- t(as.matrix(otutabP))
+
+mapping = read.delim(file = here("private_data","tijana","Seedlings_ITS2_year1_mapping.csv"), sep = ",") %>%
   mutate(Replicate_no = gsub("[A-Za-z]","", Replicate))
 mapping2 = mapping [,-1] #it is the new mapping file with the proper row names, same as in previous case, here we added names from the mapping
 rownames(mapping2) = mapping[,1]
@@ -24,33 +27,11 @@ mapping3 = sample_data(mapping2) #making corrected mapping file a phyloseq objec
 ```
 
 ```{r}
-observed <- otutabP[,1]
-
-alpha_ <- alpha_guess_ml(observed)
-
-xx <- rdirichlet_multinomial(100, sum(observed), rep(alpha_, length(observed)))
-rowSums(xx > 0)
-
-
-dirichlet_multinomial_lpmf(observed, rep(alpha_, length(observed)))
-dirichlet_multinomial_lpmf(observed, rep(alpha_+ 1e-5, length(observed)))
-dirichlet_multinomial_lpmf(observed, rep(0.1, length(observed)))
-
-dirichlet_multinomial_lpmf_dalpha(observed, 1e-12)
-dirichlet_multinomial_lpmf_dalpha(observed, 0.5)
-ff <- Vectorize(dirichlet_multinomial_lpmf_dalpha, "alpha")
-# ff <- Vectorize(function(observed, alpha) { dirichlet_multinomial_lpmf(observed, rep(alpha, length(observed)))} , "alpha")
-curve(ff(observed, x), from = 1e-12, to = 2)
-
-```
-
-
-```{r}
-resampled_otu <- sample_posterior_dm_all(100, as.matrix(otutabP), prior = "empirical") 
+resampled_otu <- sample_posterior_dm_all(100, t_otutab, prior = "empirical") 
 resampled_richness <- summarise_posterior_richness(resampled_otu)
 actual_richness <- mapping %>% inner_join(data.frame(Sample = colnames(otutabP), value = specnumber(otutabP, MARGIN = 2)), by = c("Sample" = "Sample"))
 
-resampled_richness %>% t() %>% as.data.frame() %>%
+resampled_richness %>% as.data.frame() %>%
   rownames_to_column("observation") %>% inner_join(mapping %>% mutate(Sample = as.character(Sample)), by =c("observation" = "Sample")) %>%
   gather("sample","value", -observation, -Soil, -SampleType, -Sampling_time, -Replicate, - SoilSample, -Replicate_no) %>%
   ggplot(aes(x = SampleType, y = value)) + 
@@ -62,8 +43,6 @@ resampled_richness %>% t() %>% as.data.frame() %>%
 ```
 
 ```{r}
-resampled_otu <- sample_posterior_dm_all(100, t(as.matrix(otutabP)), prior = "empirical") 
-
 resampled_shannon <- summarise_posterior_per_sample(resampled_otu, function(x) {diversity(x, index = "shannon", MARGIN = 1)})
 actual_shannon <- mapping %>% inner_join(data.frame(Sample = colnames(otutabP), value = diversity(otutabP, index = "shannon", MARGIN = 2)), by = c("Sample" = "Sample"))
 
