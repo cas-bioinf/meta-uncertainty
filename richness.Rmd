@@ -27,7 +27,7 @@ mapping3 = sample_data(mapping2) #making corrected mapping file a phyloseq objec
 ```
 
 ```{r}
-resampled_otu <- sample_posterior_dm_all(100, t_otutab, prior = "empirical") 
+resampled_otu <- sample_posterior_dm_all(100, t_otutab, prior = "ml") 
 resampled_richness <- summarise_posterior_richness(resampled_otu)
 actual_richness <- mapping %>% inner_join(data.frame(Sample = colnames(otutabP), value = specnumber(otutabP, MARGIN = 2)), by = c("Sample" = "Sample"))
 

@@ -61,7 +61,7 @@ mds$points %>% as.data.frame() %>% rownames_to_column("observation") %>% inner_j
 ```{r}
 set.seed(134524223)
 #resampled_otu <- sample_posterior_dm_all(10, t_otutab, prior = 0.5, N_draws = "original") 
-resampled_otu <- sample_posterior_dm_all(20, t_otutab, prior = "empirical", N_draws = "original")
+resampled_otu <- sample_posterior_dm_all(20, t_otutab, prior = "bayes", N_draws = "original")
 resampled_otu_flat <- flatten_posterior_samples(resampled_otu)
 original_renamed <- t_otutab
 rownames(original_renamed) <- paste0(rownames(original_renamed),"_","Orig")
@@ -73,7 +73,7 @@ resampled_mds <- metaMDS(rbind(original_renamed, resampled_otu_flat), trymax = 5
 
 ```{r}
 plot_samples_with_orig <- function(resampled_mds) {
-  resampled_mds$points %>% as.data.frame() %>% rownames_to_column("observation_sample") %>%
+  resampled_mds$points %>% as.data.frame() %>% set_names("MDS1","MDS2") %>% rownames_to_column("observation_sample") %>%
     separate("observation_sample", c("observation","sample"), sep = "_")  %>% 
     inner_join(mapping %>% mutate(Sample = as.character(Sample)), by =c("observation" = "Sample")) %>%
     mutate(is_original = sample == "Orig") %>%
@@ -88,14 +88,17 @@ What happens when we take a small subset of the samples so that they are similar
 ```{r}
 selected_observations <- mapping %>% filter(SampleType == "Control", Soil == "Spruce") %>% pull("Sample") %>% as.character()
 
-set.seed(82524521)
+set.seed(1328454)
 t_otutab_filtered <- t_otutab[selected_observations,, drop = FALSE]
-resampled_otu_filtered <- sample_posterior_dm_all(20, t_otutab_filtered, prior = 0.5, N_draws = "original")
+resampled_otu_filtered <- sample_posterior_dm_all(20, t_otutab_filtered, prior = "bayes", N_draws = "original")
 resampled_otu_filtered_flat <- flatten_posterior_samples(resampled_otu_filtered)
 original_filtered_renamed <- t_otutab_filtered
 rownames(original_filtered_renamed) <- paste0(rownames(original_filtered_renamed),"_","Orig")
 
-resampled_mds_filtered <- metaMDS(rbind(original_filtered_renamed, resampled_otu_filtered_flat), trymax = 50)
+set.seed(321452245)
+#resampled_mds_filtered <- monoMDS(vegdist(rbind(original_filtered_renamed, resampled_otu_filtered_flat)))
+resampled_mds_filtered <- metaMDS(rbind(original_filtered_renamed,resampled_otu_filtered_flat), trymax = 50)
+
 ```
 
 ```{r}

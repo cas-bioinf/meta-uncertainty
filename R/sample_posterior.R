@@ -1,6 +1,8 @@
 #Everywhere: rows - observation, columns - genes
 
-default_prior = "empirical"
+default_prior = "ml"
+
+dm_model <- stan_model(here("dm.stan"))
 
 rdirichlet_multinomial <- function(N, N_draws, alpha) {
   dirichlet_samples <- MCMCpack::rdirichlet(N, alpha)
@@ -33,7 +35,7 @@ alpha_guess_ml <- function(observed) {
   val_lower <- dirichlet_multinomial_lpmf_dalpha(observed, lower)
   val_upper <- dirichlet_multinomial_lpmf_dalpha(observed, upper)
   if(sign(val_lower) == sign(val_upper)) {
-    warning("Empirical alpha outside of expected interval, using 0.5")
+    warning("ML alpha outside of expected interval, using 0.5")
     0.5
   } else {
     uniroot(function(x) { dirichlet_multinomial_lpmf_dalpha(observed, x) },
@@ -41,22 +43,62 @@ alpha_guess_ml <- function(observed) {
   }
 }
 
-get_prior <- function(observed, prior) {
-  if(prior == "empirical") {
+alpha_guess_bayes <- function(N, observed) {
+  fit <- sampling(dm_model, data = list(N = length(observed), counts = observed),
+                  iter = 1000 + N, warmup = 1000)
+  if(get_num_divergent(fit) > 0) {
+    stop("divergences")
+  } 
+  if(get_num_max_treedepth(fit) > 0) {
+    stop("treedepth")
+  }
+  if(length(get_low_bfmi_chains(fit)) > 0) {
+    stop("low bfmi")
+  }
+  s <- summary(fit, pars = "alpha_prior")$summary
+  if( s[,"Rhat"] > 1.01) {
+    warning("Large Rhat when guessing alpha")
+  }
+  if( s[,"n_eff"] < N / 2) {
+    warning("Low n_eff when guessing alpha")
+  }
+  
+  rstan::extract(fit, pars = "alpha_prior")$alpha_prior[1:N]
+}
+
+prepare_prior <- function(N, observed, prior) {
+  if(prior == "ml") {
     prior <- alpha_guess_ml(observed)
     if(prior > 0.5) {
-      warning("Empirical prior larger than 0.5")
+      warning("ML prior larger than 0.5")
     }
-  } else if(!is.numeric(prior) || length(prior) != 1) {
-    stop("Prior must be single number or 'empirical'")
+  } else if(prior == "bayes") {
+    prior <- alpha_guess_bayes(N, observed)
+  } else if(!is.numeric(prior) || 
+            (length(prior) != 1 && length(prior) != N)) {
+    stop("Prior must be single number, vector of length N, 'ml' or 'bayes'")
   }
+  
+  if(length(prior) == 1) {
+    prior <- rep(prior, N)
+  }
+  
   prior
+}
+
+get_dirichlet_draws <- function(N, observed, prior = default_prior) {
+  prior_prep <- prepare_prior(N, observed, prior)
+  draws <- matrix(NA_real_, ncol = length(observed), nrow = N)
+  for(i in 1:N) {
+    draws[i,] <- MCMCpack::rdirichlet(1, observed + prior_prep[i])
+  }
+  # draws <- MCMCpack::rdirichlet(N, observed + prior_prep[1])
+  draws
 }
 
 # Returns a matrix with N samples (rows) and length(observed) columns
 sample_latent_dm_single <- function(N, observed, prior = default_prior) {
-  posterior <- observed + get_prior(observed, prior)
-  t(MCMCpack::rdirichlet(N, posterior))
+  t(get_dirichlet_draws(N, observed, prior))
 }
 
 # Returns a matrix with N samples (rows) and length(observed) columns
@@ -67,8 +109,8 @@ sample_posterior_dm_single <- function(N, observed, N_draws = sum(observed), pri
     stop("N_draws must be single number or 'original'")
   }
   
-  posterior <- observed + get_prior(observed, prior)
-  t(rdirichlet_multinomial(N, N_draws, posterior))
+  dirichlet_draws <- get_dirichlet_draws(N, observed, prior)
+  t(apply(dirichlet_draws, MARGIN = 1, FUN = function(x) { rmultinom(1, N_draws, x)[,1] }))
 }
 
 
