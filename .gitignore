@@ -17,3 +17,5 @@ vignettes/*.pdf
 
 private_data/
 *.nb.html
+
+*.rds

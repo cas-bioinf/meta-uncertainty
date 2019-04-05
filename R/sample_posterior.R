@@ -7,55 +7,6 @@ rdirichlet_multinomial <- function(N, N_draws, alpha) {
   apply(dirichlet_samples, MARGIN = 1, FUN = function(x) { rmultinom(1, N_draws, x)[,1] })
 }
 
-get_prior <- function(observed, prior) {
-  if(prior == "empirical") {
-    prior <- alpha_guess_ml(observed)
-    if(prior > 0.5) {
-      warning("Empirical prior larger than 0.5")
-    }
-  } else if(!is.numeric(prior) || length(prior) != 1) {
-    stop("Prior must be single number or 'empirical'")
-  }
-  prior
-}
-
-# Returns a matrix with N samples (rows) and length(observed) columns
-sample_latent_dm_single <- function(N, observed, prior = default_prior) {
-  posterior <- observed + get_prior(observed, prior)
-  t(MCMCpack::rdirichlet(N, posterior))
-}
-
-# Returns a matrix with N samples (rows) and length(observed) columns
-sample_posterior_dm_single <- function(N, observed, N_draws = sum(observed), prior = default_prior) {
-  posterior <- observed + get_prior(observed, prior)
-  t(rdirichlet_multinomial(N, N_draws, posterior))
-}
-
-
-# Returns array of size N * nrow(observed_matrix) * ncol(observed_matrix)
-sample_posterior_dm_all <- function(N, observed_matrix, N_draws = max(rowSums(observed_matrix)), 
-                                    prior = default_prior) {
-  values_raw <- apply(observed_matrix, MARGIN = 1, FUN = function(x) { sample_posterior_dm_single(N, x, N_draws, prior) }) 
-  wrong_dim_order <- array(values_raw, c(N, ncol(observed_matrix) , nrow(observed_matrix)), 
-        dimnames = list(paste0("S",1:N), colnames(observed_matrix), rownames(observed_matrix)))
-  aperm(wrong_dim_order, c(1,3,2))
-}
-
-#FUN takes a vector of values for single observation and returns a single number
-summarise_posterior_per_observation <- function(posterior, FUN) {
-  t(apply(posterior, MARGIN = c(1, 2), FUN = FUN))
-}
-
-#FUN takes a matrix of values for all observation and returns a vector number
-summarise_posterior_per_sample <- function(posterior, FUN) {
-  apply(posterior, MARGIN = c(1), FUN = FUN)
-}
-
-
-summarise_posterior_richness <- function(posterior) {
-  summarise_posterior_per_observation(posterior, function(x) { sum(x > 0) })
-}
-
 dirichlet_multinomial_lpmf <- function(y, alpha) {
   if(length(y) != length(alpha)) {
     stop("y and alpha must have equal lengths")
@@ -64,7 +15,7 @@ dirichlet_multinomial_lpmf <- function(y, alpha) {
   sum_y <- sum(y)
   
   lgamma(sum_y + 1) + lgamma(alpha_plus) + sum(lgamma(alpha + y))
-    - lgamma(alpha_plus+sum_y) - sum(lgamma(alpha)) - sum(lgamma(y + 1));
+  - lgamma(alpha_plus+sum_y) - sum(lgamma(alpha)) - sum(lgamma(y + 1));
 }
 
 dirichlet_multinomial_lpmf_dalpha <- function(y, alpha) {
@@ -86,6 +37,83 @@ alpha_guess_ml <- function(observed) {
     0.5
   } else {
     uniroot(function(x) { dirichlet_multinomial_lpmf_dalpha(observed, x) },
-          lower = lower, upper = upper)$root
+            lower = lower, upper = upper)$root
   }
 }
+
+get_prior <- function(observed, prior) {
+  if(prior == "empirical") {
+    prior <- alpha_guess_ml(observed)
+    if(prior > 0.5) {
+      warning("Empirical prior larger than 0.5")
+    }
+  } else if(!is.numeric(prior) || length(prior) != 1) {
+    stop("Prior must be single number or 'empirical'")
+  }
+  prior
+}
+
+# Returns a matrix with N samples (rows) and length(observed) columns
+sample_latent_dm_single <- function(N, observed, prior = default_prior) {
+  posterior <- observed + get_prior(observed, prior)
+  t(MCMCpack::rdirichlet(N, posterior))
+}
+
+# Returns a matrix with N samples (rows) and length(observed) columns
+sample_posterior_dm_single <- function(N, observed, N_draws = sum(observed), prior = default_prior) {
+  if(N_draws == "original") {
+    N_draws = sum(observed)
+  } else if(!is.numeric(N_draws) || length(N_draws) != 1) {
+    stop("N_draws must be single number or 'original'")
+  }
+  
+  posterior <- observed + get_prior(observed, prior)
+  t(rdirichlet_multinomial(N, N_draws, posterior))
+}
+
+
+# Returns 3D array with dimensions N, nrow(observed_matrix), ncol(observed_matrix)
+sample_posterior_dm_all <- function(N, observed_matrix, N_draws = max(rowSums(observed_matrix)), 
+                                    prior = default_prior) {
+  values_raw <- apply(observed_matrix, MARGIN = 1, FUN = function(x) { sample_posterior_dm_single(N, x, N_draws, prior) }) 
+  wrong_dim_order <- array(values_raw, c(N, ncol(observed_matrix) , nrow(observed_matrix)), 
+        dimnames = list(paste0("S",1:N), colnames(observed_matrix), rownames(observed_matrix)))
+  aperm(wrong_dim_order, c(1,3,2))
+}
+
+# Returns 3D array with dimensions N, nrow(observed_matrix), ncol(observed_matrix)
+sample_latent_dm_all <- function(N, observed_matrix,  
+                                    prior = default_prior) {
+  values_raw <- apply(observed_matrix, MARGIN = 1, FUN = function(x) { sample_latent_dm_single(N, x, prior) }) 
+  wrong_dim_order <- array(values_raw, c(N, ncol(observed_matrix) , nrow(observed_matrix)), 
+                           dimnames = list(paste0("S",1:N), colnames(observed_matrix), rownames(observed_matrix)))
+  aperm(wrong_dim_order, c(1,3,2))
+}
+
+
+#Turns value returned by `sample_posterior_dm_all` into a matrix of size N * nrow(observed_matrix), ncol(observed_matrix)
+#Useful for clustering etc.
+flatten_posterior_samples <- function(posterior_samples, name.delim = "_") {
+  dims <- dim(posterior_samples)
+  flat <- matrix(posterior_samples, dims[1] * dims[2], dims[3])
+  combined_names <- expand.grid(dimnames(posterior_samples)[[1]], dimnames(posterior_samples)[[2]]) 
+  rownames(flat) <- paste0(combined_names[[2]], name.delim, combined_names[[1]])
+  colnames(flat) <- dimnames(posterior_samples)[[3]]
+  flat
+}
+
+#FUN takes a vector of values for single observation and returns a single number
+summarise_posterior_per_observation <- function(posterior, FUN) {
+  t(apply(posterior, MARGIN = c(1, 2), FUN = FUN))
+}
+
+#FUN takes a matrix of values for all observation and returns a vector number
+summarise_posterior_per_sample <- function(posterior, FUN) {
+  apply(posterior, MARGIN = c(1), FUN = FUN)
+}
+
+
+summarise_posterior_richness <- function(posterior) {
+  summarise_posterior_per_observation(posterior, function(x) { sum(x > 0) })
+}
+
