@@ -155,6 +155,18 @@ sample_posterior_DESeq2 <- function(N, observed_matrix, mapping, design) {
   res
 }
 
+sample_posterior_rarefy <- function(N, observed_matrix, min_depth = min(rowSums(observed_matrix))) {
+  n_otus <- ncol(observed_matrix)
+  n_observations <- nrow(observed_matrix)
+  
+  res <- array(NA_integer_, c(N, n_observations, n_otus), 
+               dimnames = list(paste0("S",1:N), rownames(observed_matrix), colnames(observed_matrix)))
+  for(n in 1:N) {
+    res[n,,] <- rrarefy(observed_matrix, min_depth)
+  }
+  res
+}
+
 #Turns value returned by `sample_posterior_dm_all` into a matrix of size N * nrow(observed_matrix), ncol(observed_matrix)
 #Useful for clustering etc.
 flatten_posterior_samples <- function(posterior_samples, name.delim = "_") {

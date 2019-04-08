@@ -2,6 +2,8 @@
 title: "R Notebook"
 output: html_notebook
 ---
+
+Note - in the orig, SoilSample combines Rhisosphere and Roots - is that OK?
 ```{r setup}
 library(tidyverse)
 library(here)
@@ -22,7 +24,7 @@ rownames(otutabP) = otutable [, 1]
 t_otutab <- t(as.matrix(otutabP))
 
 mapping = read.delim(file = here("private_data","tijana","Seedlings_ITS2_year1_mapping.csv"), sep = ",") %>%
-  mutate(Replicate_no = gsub("[A-Za-z]","", Replicate))
+  mutate(Replicate_no = gsub("[A-Za-z]","", Replicate), SoilSample = interaction(Soil, SampleType))
 mapping2 = mapping [,-1] #it is the new mapping file with the proper row names, same as in previous case, here we added names from the mapping
 rownames(mapping2) = mapping[,1]
 #?order
