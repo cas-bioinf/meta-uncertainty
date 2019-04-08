@@ -34,29 +34,42 @@ mapping3 = sample_data(mapping2) #making corrected mapping file a phyloseq objec
 
 ```
 
+```{r}
+plot_base_mds <- function(mds, mapping) {
+  colnames(mds$points) <- c("MDS1","MDS2")
+  mds$points %>% as.data.frame() %>% rownames_to_column("observation") %>% inner_join(mapping %>% mutate(Sample = as.character(Sample)), by =c("observation" = "Sample")) %>%
+  ggplot(aes(MDS1, MDS2, color = SampleType, shape = Soil)) + geom_point(size = 2)  
+}
+```
+
 
 ```{r}
 set.seed(13248455)
 min_depth = min(colSums(otutabP))
-t_otus_rarefied = as.data.frame(round(rrarefy(t(otutabP), min_depth)))
+for(i in 1:10) {
+  t_otus_rarefied = as.data.frame(round(rrarefy(t(otutabP), min_depth)))
 
-mds <- metaMDS(t_otus_rarefied)
+  mds <- metaMDS(t_otus_rarefied)
+  mds_plot <- plot_base_mds(mds, mapping)
+  print(mds_plot)
+}
 
 ```
 
 ```{r}
-mds$points %>% as.data.frame() %>% rownames_to_column("observation") %>% inner_join(mapping %>% mutate(Sample = as.character(Sample)), by =c("observation" = "Sample")) %>%
-  ggplot(aes(MDS1, MDS2, color = SampleType, shape = Soil)) + geom_point(size = 2)
+set.seed(4822465)
+for(i in 1:10) {
+  t_otus_rarefied = as.data.frame(round(rrarefy(t(otutabP), min_depth)))
 
-# %>%
-#   gather("sample","value", -observation, -Soil, -SampleType, -Sampling_time, -Replicate, - SoilSample, -Replicate_no) %>%
-#   ggplot(aes(x = SampleType, y = value)) + 
-#   geom_jitter(aes(color = Replicate_no), alpha = 0.1) +
-#   geom_boxplot(outlier.shape = NA, fill = "transparent") + 
-#   geom_point(aes(color = Replicate_no), data = actual_richness, size = 3) +
-#   facet_wrap(~Soil) +  theme(axis.text.x = element_text(angle = -90, hjust = 0),
-#         axis.title.x = element_blank())
+  dist <- vegdist(t_otus_rarefied) %>% sqrt() %>% wisconsin()
+  classical_mds <- cmdscale(dist, add = TRUE, list. = TRUE)
+  mds_plot <- plot_base_mds(classical_mds, mapping)
+  print(mds_plot)
+}
+
+
 ```
+
 
 ```{r}
 set.seed(134524223)
@@ -83,6 +96,17 @@ plot_samples_with_orig <- function(resampled_mds) {
 plot_samples_with_orig(resampled_mds)
 ```
 
+The same with ML prior
+```{r}
+set.seed(321485246)
+#resampled_otu <- sample_posterior_dm_all(10, t_otutab, prior = 0.5, N_draws = "original") 
+resampled_otu_ml <- sample_posterior_dm_all(20, t_otutab, prior = "ml", N_draws = "original")
+resampled_otu_flat_ml <- flatten_posterior_samples(resampled_otu_ml)
+
+resampled_mds_ml <- metaMDS(rbind(original_renamed, resampled_otu_flat_ml), trymax = 50)
+plot_samples_with_orig(resampled_mds_ml)
+```
+
 What happens when we take a small subset of the samples so that they are similar?
 
 ```{r}
@@ -105,38 +129,112 @@ resampled_mds_filtered <- metaMDS(rbind(original_filtered_renamed,resampled_otu_
 plot_samples_with_orig(resampled_mds_filtered)
 ```
 
-
-## Using Stan
-
+Testing DESeq2
 ```{r}
-model <- stan_model(here("dm.stan"))
+set.seed(321485246)
+#resampled_otu <- sample_posterior_dm_all(10, t_otutab, prior = 0.5, N_draws = "original") 
+resampled_otu_deseq <- sample_posterior_DESeq2(20, t_otutab,  mapping, ~SoilSample)
+resampled_otu_flat_deseq <- flatten_posterior_samples(resampled_otu_deseq)
+
+resampled_mds_deseq <- metaMDS(rbind(original_renamed, resampled_otu_flat_deseq), trymax = 50)
+plot_samples_with_orig(resampled_mds_deseq)
 ```
 
 ```{r}
-fit <- sampling(model, data = list(N = ncol(t_otutab), counts = t_otutab[1,]))
-summary(fit, pars = "alpha_prior")$summary
-guess <- alpha_guess_ml(t_otutab[1,])
-guess
-tibble(alpha_prior = rstan::extract(fit, pars = "alpha_prior")$alpha_prior) %>% ggplot(aes(alpha_prior)) + 
-  geom_histogram(bins = 50) + geom_vline(xintercept = guess, color = "blue", size = 2)
+dist_deseq <- vegdist(rbind(original_renamed, resampled_otu_flat_deseq)) %>% sqrt() %>% wisconsin()
+classical_mds_deseq <- cmdscale(dist_deseq, add = TRUE, list. = TRUE)
+plot_samples_with_orig(classical_mds_deseq)
+```
+```{r}
+set.seed(321485246)
+#resampled_otu <- sample_posterior_dm_all(10, t_otutab, prior = 0.5, N_draws = "original") 
+resampled_otu_deseq <- sample_posterior_DESeq2(20, t_otutab,  mapping, ~SoilSample)
+resampled_otu_flat_deseq <- flatten_posterior_samples(resampled_otu_deseq)
+
+resampled_mds_deseq <- metaMDS(rbind(original_renamed, resampled_otu_flat_deseq), trymax = 50)
+plot_samples_with_orig(resampled_mds_deseq)
+```
+
+DESEQ with each sample separate
+
+```{r}
+set.seed(13584224)
+#resampled_otu <- sample_posterior_dm_all(10, t_otutab, prior = 0.5, N_draws = "original") 
+resampled_otu_deseq_rep <- sample_posterior_DESeq2(20, t_otutab,  mapping, ~Replicate)
+resampled_otu_flat_deseq_rep <- flatten_posterior_samples(resampled_otu_deseq_rep)
+
+resampled_mds_deseq_rep <- metaMDS(rbind(original_renamed, resampled_otu_flat_deseq_rep), trymax = 50)
+plot_samples_with_orig(resampled_mds_deseq_rep)
+```
+
+
+```{r}
+dist_deseq_rep <- vegdist(rbind(original_renamed, resampled_otu_flat_deseq_rep)) %>% sqrt() %>% wisconsin()
+classical_mds_deseq_rep <- cmdscale(dist_deseq_rep, add = TRUE, list. = TRUE)
+plot_samples_with_orig(classical_mds_deseq_rep)
 ```
 
 ```{r}
-N_samples = 20
-resampled_stan <- rstan::extract(fit)$counts_gen[1:N_samples,]
-rownames(resampled_stan) <- paste0(rownames(t_otutab)[1],"_S",1:N_samples)
-colnames(resampled_stan) <- colnames(t_otutab)
+xx <- sample_posterior_DESeq2(1, t_otutab, mapping, ~SoilSample)
+plot(log(as.numeric(xx) + 0.5), log(as.numeric(t_otutab)+ 0.5))
+abline(a = 0, b = 1)
+```
 
-set.seed(5214322)
-original_stan_renamed <- t_otutab[1,, drop = FALSE]
-rownames(original_stan_renamed) <- paste0(rownames(original_stan_renamed),"_","Orig")
 
-resampled_mds_stan <- metaMDS(rbind(original_stan_renamed, resampled_stan), trymax = 50)
+```{r}
+library(DESeq2)
+dds <- DESeqDataSetFromMatrix(countData = otutabP, colData = mapping, design = ~SoilSample)
+dds <- estimateSizeFactors(dds, type = "poscounts")
+dds <- estimateDispersions(dds)
+dds <- nbinomWaldTest(dds)
+
+head(coef(dds))
+res1 <- results(dds, contrast = c("SoilSample","Beech_B","Beech_R"))
+head(res1)
+
+res2 <- results(dds, contrast = c("SoilSample","Beech_R","Beech_B"))
+head(res2)
+
+resultsNames(dds)
+
 
 ```
 
 ```{r}
-plot_samples_with_orig(resampled_mds_stan)
+n_otus <- ncol(t_otutab)
+n_observations <- nrow(t_otutab)
+
+predicted_means <- 2^(coef(dds) %*% t(model.matrix(~SoilSample, mapping ))) * matrix(rep(sizeFactors(dds), each = n_otus), n_otus, n_observations)
+colnames(predicted_means) <- rownames(t_otutab)
+
+```
+
+
+```{r}
+sName <- "TIJ019"
+otherS <- paste0("TIJ0",20:23)
+
+for(otu in sample(1:1034, 20)) {
+  rand <- rnbinom(1000, mu = predicted_means[otu, sName], size = dispersions(dds)[otu])
+  actual <- tibble(x = c(t_otutab[sName, otu], t_otutab[otherS, otu] / sizeFactors(dds)[otherS]))
+  (tibble(x = rand) %>% ggplot(aes(x)) + geom_histogram(bins = 50) + geom_vline(data = actual, aes(xintercept = x)) )%>% print()
+}
+```
+
+```{r}
+fitted_quantiles <- pnbinom(t(t_otutab), mu = predicted_means, size = matrix(rep(dispersions(dds), times = n_observations), n_otus, n_observations))
+
+fitted_quantiles_tidy <- fitted_quantiles %>% as.data.frame() %>% rownames_to_column("otu") %>% gather("observation","quantile", -otu) 
+
+fitted_quantiles_tidy %>% filter(otu %in% sample(colnames(t_otutab), 20)) %>%
+  ggplot(aes(x = quantile)) + geom_histogram(binwidth = 0.01) 
+
+fitted_quantiles_tidy %>% filter(otu %in% sample(colnames(t_otutab), 20)) %>%
+  ggplot(aes(x = quantile)) + geom_histogram(binwidth = 0.1) + facet_wrap(~otu)
+
+fitted_quantiles_tidy %>% filter(observation %in% sample(rownames(t_otutab), 20)) %>%
+  ggplot(aes(x = quantile)) + geom_histogram(binwidth = 0.1) + facet_wrap(~observation)
+
 ```
 
 

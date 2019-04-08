@@ -45,7 +45,7 @@ alpha_guess_ml <- function(observed) {
 
 alpha_guess_bayes <- function(N, observed) {
   fit <- sampling(dm_model, data = list(N = length(observed), counts = observed),
-                  iter = 1000 + N, warmup = 1000)
+                  iter = 1000 + max(N, 500), warmup = 1000)
   if(get_num_divergent(fit) > 0) {
     stop("divergences")
   } 
@@ -132,6 +132,28 @@ sample_latent_dm_all <- function(N, observed_matrix,
   aperm(wrong_dim_order, c(1,3,2))
 }
 
+
+sample_posterior_DESeq2 <- function(N, observed_matrix, mapping, design) {
+  library(DESeq2)
+  dds <- DESeqDataSetFromMatrix(countData = t(observed_matrix), colData = mapping, design = design)
+  dds <- estimateSizeFactors(dds, type = "poscounts")
+  dds <- estimateDispersions(dds)
+  dds <- nbinomWaldTest(dds)
+  
+  n_otus <- ncol(observed_matrix)
+  n_observations <- nrow(observed_matrix)
+  
+  predicted_means <- 2^(coef(dds) %*% t(model.matrix(design, mapping ))) * matrix(rep(sizeFactors(dds), each = n_otus), n_otus, n_observations)
+  dispersions <- matrix(rep(dispersions(dds), times = n_observations))
+  
+  res <- array(NA_integer_, c(N, n_observations, n_otus), 
+               dimnames = list(paste0("S",1:N), rownames(observed_matrix), colnames(observed_matrix)))
+  for(n in 1:N) {
+    res[n,,] <- t(matrix(
+      rnbinom(n_observations * n_otus, mu = predicted_means, size = dispersions), n_otus, n_observations))
+  }
+  res
+}
 
 #Turns value returned by `sample_posterior_dm_all` into a matrix of size N * nrow(observed_matrix), ncol(observed_matrix)
 #Useful for clustering etc.
