@@ -7,6 +7,11 @@ library(tidyverse)
 library(here)
 library(vegan)
 library(cowplot)
+library(rstan)
+library(phyloseq)
+options(mc.cores = parallel::detectCores())
+rstan_options(auto_write = TRUE)
+
 source(here("R","sample_posterior.R"))
 ```
 Tijana's code to load the data
@@ -14,7 +19,6 @@ Tijana's code to load the data
 otutable = read.delim(file = here("private_data","tijana",'Seedlings_ITS2_otutab_ALL.csv'), sep = "\t") #reading the data I want to use
 otutabP = otutable[, -1]
 rownames(otutabP) = otutable [, 1]
-
 t_otutab <- t(as.matrix(otutabP))
 
 mapping = read.delim(file = here("private_data","tijana","Seedlings_ITS2_year1_mapping.csv"), sep = ",") %>%
@@ -30,7 +34,10 @@ mapping3 = sample_data(mapping2) #making corrected mapping file a phyloseq objec
 resampled_otu <- sample_posterior_dm_all(100, t_otutab, prior = "ml") 
 resampled_richness <- summarise_posterior_richness(resampled_otu)
 actual_richness <- mapping %>% inner_join(data.frame(Sample = colnames(otutabP), value = specnumber(otutabP, MARGIN = 2)), by = c("Sample" = "Sample"))
+```
 
+```{r}
+plot_richness <- function(resampled_richness, mapping, actual_richness) {
 resampled_richness %>% as.data.frame() %>%
   rownames_to_column("observation") %>% inner_join(mapping %>% mutate(Sample = as.character(Sample)), by =c("observation" = "Sample")) %>%
   gather("sample","value", -observation, -Soil, -SampleType, -Sampling_time, -Replicate, - SoilSample, -Replicate_no) %>%
@@ -40,6 +47,17 @@ resampled_richness %>% as.data.frame() %>%
   geom_point(aes(color = Replicate_no), data = actual_richness, size = 3) +
   facet_wrap(~Soil) +  theme(axis.text.x = element_text(angle = -90, hjust = 0),
         axis.title.x = element_blank())
+}
+
+plot_richness(resampled_richness, mapping, actual_richness)
+```
+
+
+```{r}
+resampled_otu_bayes <- sample_posterior_dm_all(100, t_otutab, prior = "bayes") 
+resampled_richness_bayes <- summarise_posterior_richness(resampled_otu_bayes)
+
+plot_richness(resampled_richness_bayes, mapping, actual_richness )
 ```
 
 ```{r}
@@ -82,9 +100,9 @@ shannon2 = as.data.frame(shannondiv)
 head(shannon2)
 shannon3 = merge(mapping3, shannon2, by = "row.names")
 
-plot_shannon = ggplot(shannon3, aes(x = SampleType, y = shannondiv, fill = Soil)) +
-  geom_point(stat = "identity", color = "black",
-           position = position_dodge()) +
+plot_shannon = ggplot(shannon3, aes(x = SampleType, y = shannondiv, color = Replicate_no)) +
+  geom_point(stat = "identity", size = 3) + #, 
+           #position = position_jitter(width = 0.3)) +
   facet_grid(.~Soil)
 print(plot_shannon)
 
@@ -97,7 +115,9 @@ summary_shannon = shannon3 %>%
             sd_shannon = sd(shannondiv),
             n_shannon = n(), 
             SE_shannon = sd(shannondiv)/sqrt(n()))
+```
 
+```{r}
 #Taxa richness = number of OTUs 
 #?estimateR
 #?diversity

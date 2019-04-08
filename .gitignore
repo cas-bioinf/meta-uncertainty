@@ -19,3 +19,4 @@ private_data/
 *.nb.html
 
 *.rds
+.Rproj.user
