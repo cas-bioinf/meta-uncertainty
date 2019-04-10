@@ -39,7 +39,7 @@ actual_richness <- mapping %>% inner_join(data.frame(Sample = colnames(otutabP),
 ```
 
 ```{r}
-plot_richness <- function(resampled_richness, mapping, actual_richness) {
+plot_resampled_richness <- function(resampled_richness, mapping, actual_richness) {
 resampled_richness %>% as.data.frame() %>%
   rownames_to_column("observation") %>% inner_join(mapping %>% mutate(Sample = as.character(Sample)), by =c("observation" = "Sample")) %>%
   gather("sample","value", -observation, -Soil, -SampleType, -Sampling_time, -Replicate, - SoilSample, -Replicate_no) %>%
@@ -51,7 +51,7 @@ resampled_richness %>% as.data.frame() %>%
         axis.title.x = element_blank())
 }
 
-plot_richness(resampled_richness, mapping, actual_richness)
+plot_resampled_richness(resampled_richness, mapping, actual_richness)
 ```
 
 
@@ -59,24 +59,34 @@ plot_richness(resampled_richness, mapping, actual_richness)
 resampled_otu_bayes <- sample_posterior_dm_all(100, t_otutab, prior = "bayes") 
 resampled_richness_bayes <- summarise_posterior_richness(resampled_otu_bayes)
 
-plot_richness(resampled_richness_bayes, mapping, actual_richness )
+plot_resampled_richness(resampled_richness_bayes, mapping, actual_richness )
 ```
+
+```{r}
+set.seed(32555337)
+resampled_otu_deseq <- sample_posterior_DESeq2(100, t_otutab,  mapping, ~SoilSample)
+resampled_richness_deseq <- summarise_posterior_richness(resampled_otu_deseq)
+
+plot_resampled_richness(resampled_richness_deseq, mapping, actual_richness )
+
+```
+
 
 ```{r}
 resampled_shannon <- summarise_posterior_per_sample(resampled_otu, function(x) {diversity(x, index = "shannon", MARGIN = 1)})
 actual_shannon <- mapping %>% inner_join(data.frame(Sample = colnames(otutabP), value = diversity(otutabP, index = "shannon", MARGIN = 2)), by = c("Sample" = "Sample"))
 
-resampled_shannon %>% as.data.frame() %>%
-  rownames_to_column("observation") %>% inner_join(mapping %>% mutate(Sample = as.character(Sample)), by =c("observation" = "Sample")) %>%
-  gather("sample","value", -observation, -Soil, -SampleType, -Sampling_time, -Replicate, - SoilSample, -Replicate_no) %>%
-  ggplot(aes(x = SampleType, y = value)) + 
-  geom_jitter(aes(color = Replicate_no), alpha = 0.1) +
-  geom_boxplot(outlier.shape = NA, fill = "transparent") + 
-  geom_point(aes(color = Replicate_no), data = actual_shannon, size = 3) +
-  facet_wrap(~Soil) +  theme(axis.text.x = element_text(angle = -90, hjust = 0),
-        axis.title.x = element_blank())
+
+
+plot_resampled_richness(resampled_shannon, mapping, actual_shannon)
 ```
 
+
+```{r}
+resampled_shannon_deseq <- summarise_posterior_per_sample(resampled_otu_deseq, function(x) {diversity(x, index = "shannon", MARGIN = 1)})
+plot_resampled_richness(resampled_shannon_deseq, mapping, actual_shannon)
+
+```
 
 
 ```{r}
