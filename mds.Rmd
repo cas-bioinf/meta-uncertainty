@@ -75,7 +75,11 @@ plot_sampled_mds <- function(base_mds, aligned_samples, mapping) {
   rbind(base_points, sampled_points) %>%
     inner_join(mapping %>% mutate(Sample = as.character(Sample)), by =c("observation" = "Sample")) %>%
     mutate(is_original = sample == "Orig") %>%
-    ggplot(aes(MDS1, MDS2, color = SampleType, shape = Soil, size = is_original, alpha = is_original)) + geom_point() + scale_size_manual(values = c(1, 3)) + scale_alpha_manual(values = c(0.3,1))
+    ggplot(aes(MDS1, MDS2, color = SampleType, shape = Soil, size = is_original, alpha = is_original)) +
+      geom_path(aes(group = observation), size = 1, alpha = 0.1) +
+      geom_point() + 
+      scale_size_manual(values = c(1, 3)) + 
+      scale_alpha_manual(values = c(0.3,1)) 
 }
 ```
 
@@ -85,7 +89,7 @@ base_mds <- metaMDS(t_otutab, trymax = 50)
 
 samples_rarefy <- sample_posterior_rarefy(20, t_otutab)
 aligned_samples_rarefy <- metaMDS_per_sample(samples_rarefy) %>% purrr::map(vegan::procrustes, X = base_mds)
-plot_sampled_mds(base_mds, aligned_samples, mapping)
+plot_sampled_mds(base_mds, aligned_samples_rarefy, mapping)
 ```
 
 
