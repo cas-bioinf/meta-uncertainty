@@ -3,7 +3,22 @@ title: "MDS/PCoA"
 output: html_notebook
 ---
 
-TODO: jackknife beta diversity
+jackknife beta diversity (in QIIME jackknifed_beta_diversity.py) - works by simply stacking the PCoA plots over one another (maybe works because the jackknife = removing one sample at a time so the changes are unlikely to be large) - Should try this as well
+
+- Use TweeDESeq for resampling
+
+- DistatisR umí MDS nad množinou matic
+
+- Parallel coordinates plots to show more dimensions
+
+- We can use the ANCOM model (which just ANOVA on the log ratios)
+
+- QIIME2 has rarefaction resampling for alpha diversity: https://docs.qiime2.org/2019.1/tutorials/moving-pictures/
+
+Should walk through all functions in vegan!
+Procrustes method can be used to match ordination plots
+https://www.rdocumentation.org/packages/vegan/versions/2.4-2/topics/procrustes
+
 Chao index
 redundancy analysis, variance partition
 
@@ -18,10 +33,11 @@ library(vegan)
 library(cowplot)
 library(phyloseq)
 library(rstan)
+library(doParallel)
 options(mc.cores = parallel::detectCores())
 rstan_options(auto_write = TRUE)
 source(here("R","sample_posterior.R"))
-
+registerDoParallel(parallel::detectCores())
 ```
 
 Tijana's code to load the data
@@ -48,83 +64,57 @@ plot_base_mds <- function(mds, mapping) {
   ggplot(aes(MDS1, MDS2, color = SampleType, shape = Soil)) + geom_point(size = 2)  
 }
 
-plot_sampled_mds <- function(resampled_mds, mapping) {
-  resampled_mds$points %>% as.data.frame() %>% set_names("MDS1","MDS2") %>% rownames_to_column("observation_sample") %>%
-    separate("observation_sample", c("observation","sample"), sep = "_")  %>% 
+plot_sampled_mds <- function(base_mds, aligned_samples, mapping) {
+  to_data <- function(x) { 
+    x %>% as.data.frame() %>% set_names("MDS1","MDS2") %>% rownames_to_column("observation") 
+  }
+  base_points <- base_mds$points %>% to_data() %>% mutate(sample = "Orig")
+  sampled_points <- aligned_samples %>% purrr::imap(~ .x$Yrot %>% to_data() %>% mutate(sample = paste0("S_",.y))) %>%
+     do.call(rbind, .)
+  
+  rbind(base_points, sampled_points) %>%
     inner_join(mapping %>% mutate(Sample = as.character(Sample)), by =c("observation" = "Sample")) %>%
     mutate(is_original = sample == "Orig") %>%
     ggplot(aes(MDS1, MDS2, color = SampleType, shape = Soil, size = is_original, alpha = is_original)) + geom_point() + scale_size_manual(values = c(1, 3)) + scale_alpha_manual(values = c(0.3,1))
 }
 ```
 
-
 ```{r}
 set.seed(13248455)
-min_depth = min(colSums(otutabP))
-for(i in 1:10) {
-  t_otus_rarefied = as.data.frame(round(rrarefy(t(otutabP), min_depth)))
+base_mds <- metaMDS(t_otutab, trymax = 50)
 
-  mds <- metaMDS(t_otus_rarefied)
-  mds_plot <- plot_base_mds(mds, mapping)
-  print(mds_plot)
-}
-
-```
-```{r}
-mds_rarefy <- metaMDS(flatten_posterior_samples(sample_posterior_rarefy(20, t_otutab)))
-plot_sampled_mds(mds_rarefy, mapping)
-
-```
-
-
-```{r}
-original_renamed <- t_otutab
-rownames(original_renamed) <- paste0(rownames(original_renamed),"_","Orig")
-
-mds_rarefy_with_orig <- metaMDS(rbind(original_renamed, flatten_posterior_samples(sample_posterior_rarefy(20, t_otutab))))
-plot_sampled_mds(mds_rarefy_with_orig, mapping)
+samples_rarefy <- sample_posterior_rarefy(20, t_otutab)
+aligned_samples_rarefy <- metaMDS_per_sample(samples_rarefy) %>% purrr::map(vegan::procrustes, X = base_mds)
+plot_sampled_mds(base_mds, aligned_samples, mapping)
 ```
 
 
 ```{r}
 set.seed(4822465)
-for(i in 1:10) {
-  t_otus_rarefied = as.data.frame(round(rrarefy(t(otutabP), min_depth)))
-
-  dist <- vegdist(t_otus_rarefied) %>% sqrt() %>% wisconsin()
-  classical_mds <- cmdscale(dist, add = TRUE, list. = TRUE)
-  mds_plot <- plot_base_mds(classical_mds, mapping)
-  print(mds_plot)
+classical_mds_func <- function(x) {
+  vegdist(x) %>% sqrt() %>% wisconsin() %>% cmdscale(add = TRUE, list. = TRUE)
 }
 
+base_classical_mds <- classical_mds_func(t_otutab)
+mds_samples_classical_rarefy <- samples_rarefy %>% apply_per_sample(classical_mds_func)
+aligned_samples_classical_rarefy <- mds_samples_classical_rarefy %>% purrr::map(vegan::procrustes, X = base_classical_mds)
 
+plot_sampled_mds(base_classical_mds, aligned_samples_classical_rarefy, mapping)
 ```
 
 
 ```{r}
 set.seed(134524223)
 #resampled_otu <- sample_posterior_dm_all(10, t_otutab, prior = 0.5, N_draws = "original") 
-resampled_otu <- sample_posterior_dm_all(20, t_otutab, prior = "bayes", N_draws = "original")
-resampled_otu_flat <- flatten_posterior_samples(resampled_otu)
-
-resampled_mds <- metaMDS(rbind(original_renamed, resampled_otu_flat), trymax = 50)
+resampled_otu <- sample_posterior_dm_all(20, t_otutab, prior = "ml", N_draws = "original")
+resampled_mds <- metaMDS_per_sample(resampled_otu, trymax = 50) 
+resampled_mds_aligned <- resampled_mds %>% purrr::map(vegan::procrustes, X = base_mds)
 ```
 
 
 
 ```{r}
-plot_sampled_mds(resampled_mds, mapping)
-```
-
-The same with ML prior
-```{r}
-set.seed(321485246)
-#resampled_otu <- sample_posterior_dm_all(10, t_otutab, prior = 0.5, N_draws = "original") 
-resampled_otu_ml <- sample_posterior_dm_all(20, t_otutab, prior = "ml", N_draws = "original")
-resampled_otu_flat_ml <- flatten_posterior_samples(resampled_otu_ml)
-
-resampled_mds_ml <- metaMDS(rbind(original_renamed, resampled_otu_flat_ml), trymax = 50)
-plot_sampled_mds(resampled_mds_ml, mapping)
+plot_sampled_mds(base_mds, resampled_mds_aligned, mapping)
 ```
 
 What happens when we take a small subset of the samples so that they are similar?
@@ -134,45 +124,33 @@ selected_observations <- mapping %>% filter(SampleType == "Control", Soil == "Sp
 
 set.seed(1328454)
 t_otutab_filtered <- t_otutab[selected_observations,, drop = FALSE]
-resampled_otu_filtered <- sample_posterior_dm_all(20, t_otutab_filtered, prior = "bayes", N_draws = "original")
-resampled_otu_filtered_flat <- flatten_posterior_samples(resampled_otu_filtered)
-original_filtered_renamed <- t_otutab_filtered
-rownames(original_filtered_renamed) <- paste0(rownames(original_filtered_renamed),"_","Orig")
+resampled_otu_filtered <- sample_posterior_dm_all(20, t_otutab_filtered, prior = "ml", N_draws = "original")
 
-set.seed(321452245)
-#resampled_mds_filtered <- monoMDS(vegdist(rbind(original_filtered_renamed, resampled_otu_filtered_flat)))
-resampled_mds_filtered <- metaMDS(rbind(original_filtered_renamed,resampled_otu_filtered_flat), trymax = 50)
-
+base_mds_filtered <- metaMDS(t_otutab_filtered, trymax = 50)
+resampled_mds_filtered <- metaMDS_per_sample(resampled_otu_filtered, trymax = 50) 
+resampled_mds_filtered_aligned <- resampled_mds_filtered %>% purrr::map(vegan::procrustes, X = base_mds_filtered)
 ```
 
 ```{r}
-plot_sampled_mds(resampled_mds_filtered, mapping)
+plot_sampled_mds(base_mds_filtered, resampled_mds_filtered_aligned, mapping)
 ```
 
 Testing DESeq2
 ```{r}
 set.seed(321485246)
 #resampled_otu <- sample_posterior_dm_all(10, t_otutab, prior = 0.5, N_draws = "original") 
-resampled_otu_deseq <- sample_posterior_DESeq2(10, t_otutab,  mapping, ~SoilSample)
-resampled_otu_flat_deseq <- flatten_posterior_samples(resampled_otu_deseq)
-
-resampled_mds_deseq <- metaMDS(rbind(original_renamed, resampled_otu_flat_deseq), trymax = 50)
-plot_sampled_mds(resampled_mds_deseq, mapping)
-```
-
-```{r}
-dist_deseq <- vegdist(rbind(original_renamed, resampled_otu_flat_deseq)) %>% sqrt() %>% wisconsin()
-classical_mds_deseq <- cmdscale(dist_deseq, add = TRUE, list. = TRUE)
-plot_sampled_mds(classical_mds_deseq, mapping)
-```
-```{r}
-set.seed(321485246)
-#resampled_otu <- sample_posterior_dm_all(10, t_otutab, prior = 0.5, N_draws = "original") 
 resampled_otu_deseq <- sample_posterior_DESeq2(20, t_otutab,  mapping, ~SoilSample)
-resampled_otu_flat_deseq <- flatten_posterior_samples(resampled_otu_deseq)
 
-resampled_mds_deseq <- metaMDS(rbind(original_renamed, resampled_otu_flat_deseq), trymax = 50)
-plot_sampled_mds(resampled_mds_deseq, mapping)
+
+resampled_mds_aligned_deseq <- metaMDS_per_sample(resampled_otu_deseq, trymax = 50)  %>% purrr::map(vegan::procrustes, X = base_mds)
+
+plot_sampled_mds(base_mds, resampled_mds_aligned_deseq, mapping)
+```
+
+```{r}
+set.seed(8432554)
+classical_mds_deseq <- resampled_otu_deseq %>% apply_per_sample(classical_mds_func) %>% purrr::map(vegan::procrustes, X = base_classical_mds)
+plot_sampled_mds(base_classical_mds, classical_mds_deseq, mapping)
 ```
 
 DESEQ with each sample separate

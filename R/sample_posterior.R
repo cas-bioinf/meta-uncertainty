@@ -188,8 +188,24 @@ summarise_posterior_per_sample <- function(posterior, FUN) {
   apply(posterior, MARGIN = c(1), FUN = FUN)
 }
 
+#FUN takes a mtrix of values and returns any object - a list with result per sample is returned
+apply_per_sample <- function(posterior, FUN, ...) {
+  plyr::alply(posterior, .margins = 1, .fun = FUN, ...)
+}
 
 summarise_posterior_richness <- function(posterior) {
   summarise_posterior_per_observation(posterior, function(x) { sum(x > 0) })
 }
 
+metaMDS_per_sample <- function(posterior, cores = parallel::detectCores(), ...) {
+  cl <- parallel::makePSOCKcluster(cores);
+  tryCatch({
+    parallel::clusterExport(cl, "posterior", environment())
+    parallel::clusterEvalQ(cl, {library(vegan)})
+    parallel::parLapplyLB(cl, 1:(dim(posterior)[1]), 
+                          fun = function(i) {metaMDS(posterior[i,,], ...)}, 
+                          chunk.size = 1)
+  }, finally = {
+    stopCluster(cl)
+  })
+}
