@@ -60,8 +60,8 @@ mapping3 = sample_data(mapping2) #making corrected mapping file a phyloseq objec
 ```
 
 ```{r}
-plot_mds_tijana <- function(mds, mapping, aligned_samples = NULL) {
-  plot_mds(mds, mapping, aligned_samples = aligned_samples, color_aes = SampleType, shape_aes = Soil)
+plot_mds_tijana <- function(mds, mapping, aligned_samples = NULL, show_paths = "all") {
+  plot_mds(mds, mapping, aligned_samples = aligned_samples, color_aes = SampleType, shape_aes = Soil, show_paths = show_paths)
 }
 ```
 

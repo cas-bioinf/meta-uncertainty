@@ -1,0 +1,104 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+From the paper "Variation in ectomycorrhizal fungal communities associated with Oreomunnea mexicana (Juglandaceae) in a Neotropical montane forest"
+
+The data can be downloaded at https://link.springer.com/article/10.1007/s00572-015-0641-8
+
+
+```{r setup}
+#library(MASS)
+library(tidyverse)
+library(here)
+library(vegan)
+library(cowplot)
+library(doParallel)
+library(readxl)
+
+options(mc.cores = parallel::detectCores())
+rstan_options(auto_write = TRUE)
+source(here("R","sample_posterior.R"))
+source(here("R","plot_mds.R"))
+
+registerDoParallel(parallel::detectCores())
+```
+
+```{r load_data}
+otus_raw <- read_excel(here("private_data","vanGeel2017.xlsx"), sheet = "Sample OTU matrix")
+otu_tab <- otus_raw %>% select(OTU_16:OTU_5257) %>% as.matrix()
+
+mapping <- otus_raw %>% select(species_id:plot) %>% mutate(Sample = paste0("S_",1:n()), type = if_else(species_id == "soil", "Soil", "Root"))
+
+rownames(otu_tab) <- mapping$Sample
+```
+
+
+```{r}
+plot_mds_van_geel <- function(base_mds, mapping, aligned_samples = NULL, ...) {
+  plot_mds(base_mds, mapping, aligned_samples = aligned_samples, color_aes = grassland_type, show_paths = "none", sample_point_alpha = 0.1)
+}
+```
+
+
+```{r}
+set.seed(201905103)
+base_mds <- otu_tab %>% metaMDS(trymax = 100)
+plot_mds_van_geel(base_mds, mapping) + facet_wrap(~type)
+```
+
+
+```{r, message=FALSE, results="hide"}
+mds_samples_dm <- sample_posterior_dm_all(20, otu_tab, prior = "ml",N_draws = "original") %>% 
+  metaMDS_per_sample(trymax = 100) %>% purrr::map(vegan::procrustes, X = base_mds)
+
+
+
+```
+
+```{r}
+plot_mds_van_geel(base_mds, mapping, aligned_samples = mds_samples_dm) + facet_wrap(~species_name_sci)
+
+```
+
+```{r}
+plot_mds_van_geel(base_mds, mapping, aligned_samples = md_samples_dm) + facet_wrap(~type)
+
+```
+
+
+```{r}
+set.seed(201905103)
+root_samples <- mapping %>% filter(species_id != "soil") %>% pull(Sample)
+otu_tab_root <- otu_tab[root_samples,]
+base_mds_root <- otu_tab_root %>% metaMDS(trymax = 100)
+plot_mds_van_geel(base_mds_root, mapping)
+```
+
+```{r, message=FALSE, results="hide"}
+mds_samples_dm_root <- sample_posterior_dm_all(20, otu_tab_root, prior = "ml",N_draws = "original") %>% metaMDS_per_sample(trymax = 100) %>% purrr::map(vegan::procrustes, X = base_mds_root)
+
+plot_mds_van_geel(base_mds_root, mapping, aligned_samples = mds_samples_dm_root)
+```
+
+```{r}
+mds_filtered <- function(...) {
+  filtered_samples <- mapping %>% filter(...) %>% pull(Sample)
+  otu_tab_filtered <- otu_tab[filtered_samples,]
+  base_mds_filtered <- otu_tab_filtered %>% metaMDS()
+  
+  mds_samples_dm_filtered <- sample_posterior_dm_all(20, otu_tab_filtered, prior = "ml",N_draws = "original") %>% metaMDS_per_sample() %>% purrr::map(vegan::procrustes, X = base_mds_filtered)
+  
+  plot_mds_van_geel(base_mds_filtered, mapping, aligned_samples = mds_samples_dm_filtered)
+}
+
+mds_filtered(species_id == "Ach_mil")
+
+
+
+```
+```{r}
+mds_filtered(species_id == "Fes_rub")
+```
+

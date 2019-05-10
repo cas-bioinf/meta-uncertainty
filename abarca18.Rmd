@@ -13,8 +13,6 @@ library(tidyverse)
 library(here)
 library(vegan)
 library(cowplot)
-library(phyloseq)
-library(rstan)
 library(doParallel)
 library(readxl)
 
@@ -39,14 +37,10 @@ mapping <- tibble(Country = "PR", Site = "Santa Ana", Sample = paste0("S",1:10))
   rbind(tibble(Country = "CR", Site = "Turrialba", Sample = paste0("T",1:4)))
 ```
 
-```{r}
-phylo_object <- phyloseq(otu_table(otu_tab, taxa_are_rows = FALSE), sample_data(mapping %>% as.data.frame() %>% column_to_rownames("Sample")))
-```
-
 
 ```{r}
 plot_mds_abarca <- function(base_mds, mapping, aligned_samples = NULL) {
-  plot_mds(base_mds, aligned_samples, mapping, color_aes = Country, shape_aes = Site) +
+  plot_mds(base_mds, mapping, aligned_samples = aligned_samples, color_aes = Country, shape_aes = Site) +
     scale_color_manual(values = c(CR = "red", PR = "black")) +
     scale_shape_manual(values = c("Santa Ana" = 21, "Turrialba" = 3, "Sarapiqui" = 2)) +
     scale_y_continuous(trans = "reverse")
