@@ -8,6 +8,7 @@ From the paper "Characterization of the Skin Microbiota of the Cane Toad Rhinell
 The data can be downloaded at https://www.frontiersin.org/articles/10.3389/fmicb.2017.02624/full#supplementary-material
 
 ```{r setup}
+library(MASS)
 library(tidyverse)
 library(here)
 library(vegan)
@@ -16,10 +17,12 @@ library(phyloseq)
 library(rstan)
 library(doParallel)
 library(readxl)
-library(MASS)
+
 options(mc.cores = parallel::detectCores())
 rstan_options(auto_write = TRUE)
 source(here("R","sample_posterior.R"))
+source(here("R","plot_mds.R"))
+
 registerDoParallel(parallel::detectCores())
 ```
 
@@ -42,16 +45,13 @@ phylo_object <- phyloseq(otu_table(otu_tab, taxa_are_rows = FALSE), sample_data(
 
 
 ```{r}
-plot_base_mds <- function(mds, mapping) {
-  colnames(mds$points) <- c("MDS1","MDS2")
-  mds$points %>% as.data.frame() %>% rownames_to_column("observation") %>% 
-    inner_join(mapping, by =c("observation" = "Sample")) %>%
-    mutate(MDS2 = -MDS2) %>% #For some reason I get the plot mirrored
-  ggplot(aes(MDS1, MDS2, shape = Site, color = Country)) + 
-    geom_point(size = 2)  +
+plot_mds_abarca <- function(base_mds, mapping, aligned_samples = NULL) {
+  plot_mds(base_mds, aligned_samples, mapping, color_aes = Country, shape_aes = Site) +
     scale_color_manual(values = c(CR = "red", PR = "black")) +
-    scale_shape_manual(values = c("Santa Ana" = 21, "Turrialba" = 3, "Sarapiqui" = 2))
+    scale_shape_manual(values = c("Santa Ana" = 21, "Turrialba" = 3, "Sarapiqui" = 2)) +
+    scale_y_continuous(trans = "reverse")
 }
+
 ```
 
 Can we get the original plot?
@@ -62,56 +62,34 @@ nmds_func <- function(x) {
   x %>% vegdist() %>% MASS::isoMDS()
 }
 base_mds <- otu_tab %>%   nmds_func()
-plot_base_mds(base_mds, mapping)
+plot_mds_abarca(base_mds, mapping)
 
 base_meta_mds <- otu_tab %>% metaMDS()
-plot_base_mds(base_meta_mds, mapping)
+plot_mds_abarca(base_meta_mds, mapping)
 ```
 
 ```{r}
-plot_sampled_mds <- function(base_mds, aligned_samples, mapping) {
-  to_data <- function(x) { 
-    x %>% as.data.frame() %>% set_names("MDS1","MDS2") %>% rownames_to_column("observation") 
-  }
-  base_points <- base_mds$points %>% to_data() %>% mutate(sample = "Orig")
-  sampled_points <- aligned_samples %>% purrr::imap(~ .x$Yrot %>% to_data() %>% mutate(sample = paste0("S_",.y))) %>%
-     do.call(rbind, .)
-  
-  #TODO randomize to have different sample order for each drawn path.
-  
-  rbind(base_points, sampled_points) %>%
-    inner_join(mapping %>% mutate(Sample = as.character(Sample)), by =c("observation" = "Sample")) %>%
-    mutate(is_original = sample == "Orig") %>%
-    mutate(MDS2 = -MDS2) %>% #For some reason I get the plot mirrored
-    ggplot(aes(MDS1, MDS2, shape = Site, color = Country, size = is_original, alpha = is_original)) + 
-      geom_path(aes(group = observation), size = 1, alpha = 0.1) +
-      geom_point() + 
-      scale_size_manual(values = c(1, 3)) + 
-      scale_alpha_manual(values = c(0.3,1)) +
-    scale_color_manual(values = c(CR = "red", PR = "black")) +
-    scale_shape_manual(values = c("Santa Ana" = 21, "Turrialba" = 3, "Sarapiqui" = 2))
-}
 ```
 
 
 ```{r, message=FALSE, results="hide"}
 mds_samples_rarefy <- sample_posterior_rarefy(20, otu_tab) %>% apply_per_sample(nmds_func) %>% purrr::map(vegan::procrustes, X = base_mds)
 
-plot_sampled_mds(base_mds, mds_samples_rarefy, mapping)
+plot_mds_abarca(base_mds, mapping, aligned_samples = mds_samples_rarefy)
 
 ```
 
 ```{r, message=FALSE, results="hide"}
 mds_samples_dm <- sample_posterior_dm_all(20, otu_tab, prior = "ml",N_draws = "original") %>% apply_per_sample(nmds_func) %>% purrr::map(vegan::procrustes, X = base_mds)
 
-plot_sampled_mds(base_mds, mds_samples_dm, mapping)
+plot_mds_abarca(base_mds, mapping, aligned_samples = mds_samples_dm)
 ```
 
 ```{r}
 mds_samples_dm_mds <- sample_posterior_dm_all(20, otu_tab, prior = "ml") %>% metaMDS_per_sample() %>% purrr::map(vegan::procrustes, X = base_meta_mds)
 
 
-plot_sampled_mds(base_meta_mds, mds_samples_dm_mds, mapping)
+plot_mds_abarca(base_meta_mds, mapping, aligned_samples = mds_samples_dm_mds)
 
 ```
 
@@ -119,6 +97,6 @@ plot_sampled_mds(base_meta_mds, mds_samples_dm_mds, mapping)
 mds_samples_rarefy_mds <- sample_posterior_rarefy(20, otu_tab) %>% metaMDS_per_sample() %>% purrr::map(vegan::procrustes, X = base_meta_mds)
 
 
-plot_sampled_mds(base_meta_mds, mds_samples_rarefy_mds, mapping)
+plot_mds_abarca(base_meta_mds,  mapping, aligned_samples = mds_samples_rarefy_mds)
 ```
 
