@@ -72,10 +72,13 @@ plot_sampled_mds <- function(base_mds, aligned_samples, mapping) {
   sampled_points <- aligned_samples %>% purrr::imap(~ .x$Yrot %>% to_data() %>% mutate(sample = paste0("S_",.y))) %>%
      do.call(rbind, .)
   
+  #TODO randomize to have different sample order for each drawn path.
+  
   rbind(base_points, sampled_points) %>%
     inner_join(mapping %>% mutate(Sample = as.character(Sample)), by =c("observation" = "Sample")) %>%
     mutate(is_original = sample == "Orig") %>%
     ggplot(aes(MDS1, MDS2, color = SampleType, shape = Soil, size = is_original, alpha = is_original)) +
+    
       geom_path(aes(group = observation), size = 1, alpha = 0.1) +
       geom_point() + 
       scale_size_manual(values = c(1, 3)) + 
