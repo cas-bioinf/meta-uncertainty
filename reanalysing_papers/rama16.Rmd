@@ -1,0 +1,71 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+From the paper "Fungi Sailing the Arctic Ocean: Speciose Communities in North Atlantic Driftwood as Revealed by High-Throughput Amplicon Sequencing"
+
+The data can be downloaded at https://d360prx.biomed.cas.cz:2589/10.1007/s00248-016-0778-9
+
+
+```{r setup}
+library(tidyverse)
+library(here)
+library(vegan)
+library(cowplot)
+library(doParallel)
+library(readxl)
+library(rstan)
+
+options(mc.cores = parallel::detectCores())
+rstan_options(auto_write = TRUE)
+source(here("R","sample_posterior.R"))
+source(here("R","plot_mds.R"))
+
+registerDoParallel(parallel::detectCores())
+```
+
+```{r load_data}
+otus_raw <- read_excel(here("private_data","rama2016","248_2016_778_MOESM4_ESM.xlsx"), sheet = "Table S3", skip = 4)
+#otu_tab <- otus_raw %>% as.data.frame() %>% column_to_rownames("X__1") %>% as.matrix()
+otu_tab <- otus_raw %>% select(-X__1) %>% as.matrix()
+
+mapping <- read_excel(here("private_data","rama2016","248_2016_778_MOESM3_ESM.xlsx"), sheet = "Table S2", skip = 4) %>% mutate(Sample = paste0("S_",No))
+  
+rownames(otu_tab) <- mapping$Sample
+```
+
+
+```{r}
+plot_mds_rama <- function(base_mds, mapping, aligned_samples = NULL, ...) {
+  plot_mds(base_mds, mapping, aligned_samples = aligned_samples, color_aes = as.factor(Tree), show_paths = "all", sample_point_alpha = 0.1) + scale_y_continuous(trans = "reverse") + scale_x_continuous(trans = "reverse")
+}
+
+mds_fun <- function(x) {
+  
+}
+```
+
+
+```{r}
+set.seed(20190514)
+base_mds <- otu_tab %>% metaMDS(try = 100, maxit = 500, model = "global")
+plot_mds_rama(base_mds, mapping)
+```
+
+Turns out it is only presence/absenca data, so not really meaningful to use my methods...
+
+```{r, message=FALSE, results="hide"}
+mds_samples_dm <- sample_posterior_dm_all(20, otu_tab, prior = "ml",N_draws = "original") %>% 
+  metaMDS_per_sample(try = 100, maxit = 500, model = "global") %>% purrr::map(vegan::procrustes, X = base_mds)
+
+
+
+```
+
+```{r}
+plot_mds_rama(base_mds, mapping, aligned_samples = mds_samples_dm)
+
+```
+
+

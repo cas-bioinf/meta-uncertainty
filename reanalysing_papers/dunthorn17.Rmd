@@ -1,0 +1,79 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+From the paper "Yeasts Dominate Soil Fungal Communities In Three Lowland Neotropical Rainforests"
+
+The data can be downloaded at https://onlinelibrary.wiley.com/doi/abs/10.1111/1758-2229.12575
+
+
+```{r setup}
+library(tidyverse)
+library(here)
+library(vegan)
+library(cowplot)
+library(doParallel)
+library(readxl)
+library(rstan)
+
+options(mc.cores = parallel::detectCores())
+rstan_options(auto_write = TRUE)
+source(here("R","sample_posterior.R"))
+source(here("R","plot_mds.R"))
+
+registerDoParallel(parallel::detectCores())
+```
+
+```{r load_data}
+otus_raw <- read.csv(here("private_data","Dunthorn2017.txt"), stringsAsFactors = FALSE, sep = "\t")
+#otu_tab <- otus_raw %>% as.data.frame() %>% column_to_rownames("X__1") %>% as.matrix()
+otu_tab <- otus_raw %>% select(B005_B006:T199_T200) %>% as.matrix() %>% t()
+otu_tab <- otu_tab[rowSums(otu_tab) > 2000 & rownames(otu_tab) != "B005_B006",]
+
+mapping <- tibble(Sample = rownames(otu_tab)) %>% mutate(Origin = if_else(grepl("^B", Sample), "Panama", if_else(grepl("^L", Sample), "Costa Rica", "Ecuador")))
+```
+
+
+```{r}
+plot_mds_dunthorn <- function(base_mds, mapping, aligned_samples = NULL, ...) {
+  plot_mds(base_mds, mapping, aligned_samples = aligned_samples, color_aes = Origin, shape_aes = Origin, show_paths = 0.5, sample_point_alpha = 0.2) #+ scale_y_continuous(trans = "reverse") + scale_x_continuous(trans = "reverse")
+}
+
+```
+
+
+```{r}
+set.seed(20190514)
+base_mds <- otu_tab %>% metaMDS(trymax = 400, maxit = 500)
+#base_mds$points
+plot_mds_dunthorn(base_mds, mapping)
+```
+
+
+```{r, message=FALSE, results="hide"}
+mds_samples_dm <- sample_posterior_dm_all(20, otu_tab, prior = "ml",N_draws = "original") %>% 
+  metaMDS_per_sample(trymax = 400, maxit = 500) %>% purrr::map(vegan::procrustes, X = base_mds)
+
+
+
+```
+
+```{r}
+plot_mds_dunthorn(base_mds, mapping, aligned_samples = mds_samples_dm)
+
+```
+
+```{r}
+mds_samples_rarefy <- sample_posterior_rarefy(20, otu_tab) %>% 
+  metaMDS_per_sample(try = 200, maxit = 500) %>% purrr::map(vegan::procrustes, X = base_mds)
+plot_mds_dunthorn(base_mds, mapping, aligned_samples = mds_samples_rarefy)
+```
+```{r}
+mds_samples_rarefy_unaligned <- sample_posterior_rarefy(10, otu_tab) %>% 
+  metaMDS_per_sample(try = 200, maxit = 500, autotransform = FALSE)
+for(i in 1:length(mds_samples_rarefy_unaligned)) {
+  plot_mds_dunthorn(mds_samples_rarefy_unaligned[[i]], mapping) %>% print()
+}
+```
+

@@ -1,0 +1,55 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+From the paper "Variation in ectomycorrhizal fungal communities associated with Oreomunnea mexicana (Juglandaceae) in a Neotropical montane forest"
+
+The data can be downloaded at https://link.springer.com/article/10.1007/s00572-015-0641-8
+
+
+```{r setup}
+#library(MASS)
+library(tidyverse)
+library(here)
+library(vegan)
+library(cowplot)
+library(doParallel)
+library(readxl)
+
+options(mc.cores = parallel::detectCores())
+rstan_options(auto_write = TRUE)
+source(here("R","sample_posterior.R"))
+source(here("R","plot_mds.R"))
+
+registerDoParallel(parallel::detectCores())
+```
+
+```{r load_data}
+otus_raw <- read_excel(here("private_data","Corrales2015.xlsx"), sheet = "Sheet1", skip = 3)
+otu_tab <- otus_raw %>% select(AF:HO) %>% as.matrix() %>% t()
+colnames(otu_tab) <- otus_raw$X__1
+otu_tab[is.na(otu_tab)] <- 0
+```
+
+```{r}
+mapping = tibble(Sample = c("HA","HB","HO","AF"), Fertility = c("low","low","high","high"), Group = c("A","B","B","A"))
+```
+
+```{r}
+plot_mds_corrales <- function(base_mds, mapping, aligned_samples = NULL) {
+  plot_mds(base_mds, mapping, aligned_samples = aligned_samples, color_aes = Group, shape_aes = Fertility)
+}
+```
+
+Reconstructing original plot
+Actually couldn't work - the supplement only has aggregates across samples
+
+```{r}
+nmds_func <- function(x) {
+  x %>% vegdist() %>% MASS::isoMDS()
+}
+base_mds <- otu_tab %>%   nmds_func()
+plot_mds_corrales(base_mds, mapping)
+```
+
