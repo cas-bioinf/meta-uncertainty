@@ -20,3 +20,5 @@ private_data/
 
 *.rds
 .Rproj.user
+packrat/lib*/
+packrat/src/
