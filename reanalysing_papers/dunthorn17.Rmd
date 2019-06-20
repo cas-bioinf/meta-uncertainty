@@ -61,7 +61,7 @@ mds_samples_dm <- sample_posterior_dm_all(20, otu_tab, prior = "ml",N_draws = "o
 
 ```{r}
 plot_mds_dunthorn(base_mds, mapping, aligned_samples = mds_samples_dm)
-
+plot_mds_dunthorn(base_mds, mapping, aligned_samples = mds_samples_dm) + facet_wrap(~Origin)
 ```
 
 ```{r}
@@ -77,3 +77,50 @@ for(i in 1:length(mds_samples_rarefy_unaligned)) {
 }
 ```
 
+# Subsetting the data
+
+```{r, message=FALSE, results="hide"}
+set.seed(20190620)
+for(i in 1:5) {
+  samples_to_use <- mapping %>% group_by(Origin) %>% sample_n(3) %>% pull(Sample)
+  otu_tab_filtered <- otu_tab[samples_to_use,]
+  
+  base_mds_filtered <- otu_tab_filtered %>% metaMDS(trymax = 400, maxit = 500)
+  mds_samples_dm_filtered <- sample_posterior_dm_all(20, otu_tab_filtered, prior = "ml",N_draws = "original") %>% 
+    metaMDS_per_sample(trymax = 400, maxit = 500) %>% purrr::map(vegan::procrustes, X = base_mds_filtered)
+  
+  plot_mds_dunthorn(base_mds_filtered, mapping, aligned_samples = mds_samples_dm_filtered) %>% print()
+}
+
+```
+
+
+```{r, message=FALSE, results="hide"}
+set.seed(201906202)
+for(i in 1:5) {
+  samples_to_use <- mapping %>% group_by(Origin) %>% sample_n(10) %>% pull(Sample)
+  otu_tab_filtered <- otu_tab[samples_to_use,]
+  
+  base_mds_filtered <- otu_tab_filtered %>% metaMDS(trymax = 400, maxit = 500)
+  mds_samples_dm_filtered <- sample_posterior_dm_all(20, otu_tab_filtered, prior = "ml",N_draws = "original") %>% 
+    metaMDS_per_sample(trymax = 400, maxit = 500) %>% purrr::map(vegan::procrustes, X = base_mds_filtered)
+  
+  plot_mds_dunthorn(base_mds_filtered, mapping, aligned_samples = mds_samples_dm_filtered) %>% print()
+}
+
+```
+
+```{r, message=FALSE, results="hide"}
+set.seed(201906203)
+for(i in 1:5) {
+  samples_to_use <- mapping %>% group_by(Origin) %>% sample_n(15) %>% pull(Sample)
+  otu_tab_filtered <- otu_tab[samples_to_use,]
+  
+  base_mds_filtered <- otu_tab_filtered %>% metaMDS(trymax = 400, maxit = 500)
+  mds_samples_dm_filtered <- sample_posterior_dm_all(20, otu_tab_filtered, prior = "ml",N_draws = "original") %>% 
+    metaMDS_per_sample(trymax = 400, maxit = 500) %>% purrr::map(vegan::procrustes, X = base_mds_filtered)
+  
+  plot_mds_dunthorn(base_mds_filtered, mapping, aligned_samples = mds_samples_dm_filtered) %>% print()
+}
+
+```

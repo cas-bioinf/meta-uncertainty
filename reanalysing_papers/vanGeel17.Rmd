@@ -36,8 +36,8 @@ rownames(otu_tab) <- mapping$Sample
 
 
 ```{r}
-plot_mds_van_geel <- function(base_mds, mapping, aligned_samples = NULL, ...) {
-  plot_mds(base_mds, mapping, aligned_samples = aligned_samples, color_aes = grassland_type, show_paths = "none", sample_point_alpha = 0.1)
+plot_mds_van_geel <- function(base_mds, mapping, aligned_samples = NULL, show_paths = "none", ...) {
+  plot_mds(base_mds, mapping, aligned_samples = aligned_samples, color_aes = grassland_type, show_paths = show_paths, sample_point_alpha = 0.1)
 }
 ```
 
@@ -58,47 +58,46 @@ mds_samples_dm <- sample_posterior_dm_all(20, otu_tab, prior = "ml",N_draws = "o
 ```
 
 ```{r}
+plot_mds_van_geel(base_mds, mapping, aligned_samples = mds_samples_dm) + facet_wrap(~type)
+```
+
+
+```{r}
 plot_mds_van_geel(base_mds, mapping, aligned_samples = mds_samples_dm) + facet_wrap(~species_name_sci)
 
 ```
 
-```{r}
-plot_mds_van_geel(base_mds, mapping, aligned_samples = md_samples_dm) + facet_wrap(~type)
+```{r, message=FALSE, results="hide"}
+set.seed(20190620)
+for(i in 1:5) {
+  samples_to_use <- mapping %>% group_by(type) %>% sample_n(10) %>% pull(Sample)
+  otu_tab_filtered <- otu_tab[samples_to_use,]
+  
+  base_mds_filtered <- otu_tab_filtered %>% metaMDS(trymax = 100)
+  # base_mds_filtered <- base_mds #otu_tab_filtered %>% metaMDS(trymax = 100)
+  # base_mds_filtered$points <- base_mds$points[samples_to_use,]
+  mds_samples_dm_filtered <- sample_posterior_dm_all(20, otu_tab_filtered, prior = "ml",N_draws = "original") %>% 
+    metaMDS_per_sample(trymax = 100) %>% purrr::map(vegan::procrustes, X = base_mds_filtered)
+  
+  plot <- plot_mds_van_geel(base_mds_filtered, mapping, aligned_samples = mds_samples_dm_filtered, show_paths = 0.5)  + facet_wrap(~type) 
+  print(plot)
+}
 
-```
-
-
-```{r}
-set.seed(201905103)
-root_samples <- mapping %>% filter(species_id != "soil") %>% pull(Sample)
-otu_tab_root <- otu_tab[root_samples,]
-base_mds_root <- otu_tab_root %>% metaMDS(trymax = 100)
-plot_mds_van_geel(base_mds_root, mapping)
 ```
 
 ```{r, message=FALSE, results="hide"}
-mds_samples_dm_root <- sample_posterior_dm_all(20, otu_tab_root, prior = "ml",N_draws = "original") %>% metaMDS_per_sample(trymax = 100) %>% purrr::map(vegan::procrustes, X = base_mds_root)
-
-plot_mds_van_geel(base_mds_root, mapping, aligned_samples = mds_samples_dm_root)
-```
-
-```{r}
-mds_filtered <- function(...) {
-  filtered_samples <- mapping %>% filter(...) %>% pull(Sample)
-  otu_tab_filtered <- otu_tab[filtered_samples,]
-  base_mds_filtered <- otu_tab_filtered %>% metaMDS()
+set.seed(201906205)
+for(i in 1:5) {
+  samples_to_use <- mapping %>% group_by(type) %>% sample_n(20) %>% pull(Sample)
+  otu_tab_filtered <- otu_tab[samples_to_use,]
   
-  mds_samples_dm_filtered <- sample_posterior_dm_all(20, otu_tab_filtered, prior = "ml",N_draws = "original") %>% metaMDS_per_sample() %>% purrr::map(vegan::procrustes, X = base_mds_filtered)
+  base_mds_filtered <- base_mds #otu_tab_filtered %>% metaMDS(trymax = 100)
+  base_mds_filtered$points <- base_mds$points[samples_to_use,]
+  mds_samples_dm_filtered <- sample_posterior_dm_all(20, otu_tab_filtered, prior = "ml",N_draws = "original") %>% 
+    metaMDS_per_sample(trymax = 100) %>% purrr::map(vegan::procrustes, X = base_mds_filtered)
   
-  plot_mds_van_geel(base_mds_filtered, mapping, aligned_samples = mds_samples_dm_filtered)
+  plot <- plot_mds_van_geel(base_mds_filtered, mapping, aligned_samples = mds_samples_dm_filtered, show_paths = 0.5)  + facet_wrap(~type) 
+  print(plot)
 }
 
-mds_filtered(species_id == "Ach_mil")
-
-
-
 ```
-```{r}
-mds_filtered(species_id == "Fes_rub")
-```
-
