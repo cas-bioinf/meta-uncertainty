@@ -199,7 +199,10 @@ summarise_posterior_richness <- function(posterior) {
 
 metaMDS_per_sample <- function(posterior, cores = parallel::detectCores(), ...) {
   cl <- parallel::makePSOCKcluster(cores);
+  currentLibPaths <- .libPaths()
   tryCatch({
+    parallel::clusterExport(cl, "currentLibPaths", environment())
+    parallel::clusterEvalQ(cl, .libPaths(currentLibPaths))
     parallel::clusterExport(cl, "posterior", environment())
     parallel::clusterEvalQ(cl, {library(vegan)})
     parallel::parLapplyLB(cl, 1:(dim(posterior)[1]), 
