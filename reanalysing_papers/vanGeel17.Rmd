@@ -19,9 +19,7 @@ library(readxl)
 
 options(mc.cores = parallel::detectCores())
 rstan_options(auto_write = TRUE)
-source(here("R","sample_posterior.R"))
-source(here("R","plot_mds.R"))
-
+devtools::load_all()
 registerDoParallel(parallel::detectCores())
 ```
 
@@ -44,7 +42,7 @@ plot_mds_van_geel <- function(base_mds, mapping, aligned_samples = NULL, show_pa
 
 ```{r}
 set.seed(201905103)
-base_mds <- otu_tab %>% metaMDS(trymax = 100)
+base_mds <- otu_tab %>% metaMDS(trymax = 100, parallel = 1)
 plot_mds_van_geel(base_mds, mapping) + facet_wrap(~type)
 ```
 
@@ -63,9 +61,19 @@ plot_mds_van_geel(base_mds, mapping, aligned_samples = mds_samples_dm) + facet_w
 
 
 ```{r}
+groups <- data.frame(observation = rownames(base_mds$points)) %>% inner_join(mapping, by = c("observation" = "Sample")) %>% pull("type")
+
+connectivity_group(base_mds, mds_samples_dm)
+connectivity_all_groups(base_mds, mds_samples_dm, groups = groups)
+```
+
+
+```{r}
 plot_mds_van_geel(base_mds, mapping, aligned_samples = mds_samples_dm) + facet_wrap(~species_name_sci)
 
 ```
+
+
 
 ```{r, message=FALSE, results="hide"}
 set.seed(20190620)

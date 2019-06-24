@@ -19,8 +19,7 @@ library(rstan)
 
 options(mc.cores = parallel::detectCores())
 rstan_options(auto_write = TRUE)
-source(here("R","sample_posterior.R"))
-source(here("R","plot_mds.R"))
+devtools::load_all()
 
 registerDoParallel(parallel::detectCores())
 ```

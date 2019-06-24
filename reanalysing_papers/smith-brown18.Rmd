@@ -1,0 +1,79 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+From the paper "Male-specific Association Between Fat-Free Mass Index and Fecal Microbiota in 2- to 3-Year-Old Australian Children"
+
+The data can be downloaded at https://qiita.ucsd.edu/study/description/10778# (login to qiita required)
+
+
+```{r setup}
+library(tidyverse)
+library(here)
+library(vegan)
+library(cowplot)
+library(doParallel)
+library(biomformat)
+library(rstan)
+
+options(mc.cores = parallel::detectCores())
+rstan_options(auto_write = TRUE)
+source(here("R","sample_posterior.R"))
+source(here("R","plot_mds.R"))
+
+registerDoParallel(parallel::detectCores())
+```
+
+```{r load_data}
+otus_raw <- import_biom(here("private_data","smith-brown2018","46351_otu_table.biom"))
+#otus_raw <- read_biom(here("private_data","wolfe14","47198_otu_table.biom"))
+otus_raw$columns %>% purrr::map(~.x$id) %>% unlist()
+otu_tab <- biom_data(otus_raw) %>% t() %>% as.matrix()
+
+mapping <- tibble(Sample = rownames(otu_tab)) #%>% mutate(Origin = if_else(grepl("^B", Sample), "Panama", if_else(grepl("^L", Sample), "Costa Rica", "Ecuador")))
+```
+
+
+```{r}
+plot_mds_brown_smith <- function(base_mds, mapping, aligned_samples = NULL, ...) {
+  plot_mds(base_mds, mapping, aligned_samples = aligned_samples)
+}
+
+```
+
+
+```{r}
+set.seed(20190517)
+base_mds <- otu_tab %>% metaMDS(trymax = 400, maxit = 500)
+#base_mds$points
+plot_mds_brown_smith(base_mds, mapping)
+```
+
+
+```{r, message=FALSE, results="hide"}
+mds_samples_dm <- sample_posterior_dm_all(20, otu_tab, prior = "ml",N_draws = "original") %>% 
+  metaMDS_per_sample(trymax = 400, maxit = 500) %>% purrr::map(vegan::procrustes, X = base_mds)
+
+
+
+```
+
+```{r}
+plot_mds_dunthorn(base_mds, mapping, aligned_samples = mds_samples_dm)
+
+```
+
+```{r}
+mds_samples_rarefy <- sample_posterior_rarefy(20, otu_tab) %>% 
+  metaMDS_per_sample(try = 200, maxit = 500) %>% purrr::map(vegan::procrustes, X = base_mds)
+plot_mds_dunthorn(base_mds, mapping, aligned_samples = mds_samples_rarefy)
+```
+```{r}
+mds_samples_rarefy_unaligned <- sample_posterior_rarefy(10, otu_tab) %>% 
+  metaMDS_per_sample(try = 200, maxit = 500, autotransform = FALSE)
+for(i in 1:length(mds_samples_rarefy_unaligned)) {
+  plot_mds_dunthorn(mds_samples_rarefy_unaligned[[i]], mapping) %>% print()
+}
+```
+
