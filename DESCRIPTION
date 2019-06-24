@@ -1,0 +1,15 @@
+Package: metagenboot
+Title: Diagnostics for Metagenomic Data via Model-Based Bootstrapping
+Version: 0.0.0.9000
+Authors@R: 
+    person(given = "Martin",
+           family = "Modrák",
+           role = c("aut", "cre"),
+           email = "martin.modrak@biomed.cas.cz",
+           comment = c(ORCID = "0000-0002-8886-7797"))
+Description: What the package does (one paragraph).
+License: Apache License 2.0
+Encoding: UTF-8
+LazyData: true
+Suggests: 
+    testthat (>= 2.1.0)
