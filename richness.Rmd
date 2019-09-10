@@ -33,7 +33,7 @@ mapping3 = sample_data(mapping2) #making corrected mapping file a phyloseq objec
 ```
 
 ```{r}
-resampled_otu <- sample_posterior_dm_all(100, t_otutab, prior = "ml") 
+resampled_otu <- sample_posterior_dm(100, t_otutab, prior = "ml") 
 resampled_richness <- summarise_posterior_richness(resampled_otu)
 actual_richness <- mapping %>% inner_join(data.frame(Sample = colnames(otutabP), value = specnumber(otutabP, MARGIN = 2)), by = c("Sample" = "Sample"))
 ```
@@ -56,7 +56,7 @@ plot_resampled_richness(resampled_richness, mapping, actual_richness)
 
 
 ```{r}
-resampled_otu_bayes <- sample_posterior_dm_all(100, t_otutab, prior = "bayes") 
+resampled_otu_bayes <- sample_posterior_dm(100, t_otutab, prior = "bayes") 
 resampled_richness_bayes <- summarise_posterior_richness(resampled_otu_bayes)
 
 plot_resampled_richness(resampled_richness_bayes, mapping, actual_richness )

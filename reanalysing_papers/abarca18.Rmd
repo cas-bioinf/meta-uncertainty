@@ -17,7 +17,7 @@ library(doParallel)
 library(readxl)
 
 options(mc.cores = parallel::detectCores())
-rstan_options(auto_write = TRUE)
+rstan::rstan_options(auto_write = TRUE)
 devtools::load_all()
 
 registerDoParallel(parallel::detectCores())
@@ -26,7 +26,8 @@ registerDoParallel(parallel::detectCores())
 ```{r load_data}
 otus_raw <- read_excel(here("private_data","abarca2018","table 3.xlsx"), sheet ="Supplementary-table7-otu50%",range = "A2:V5154")
 
-otu_tab <- otus_raw %>% select(-`#OTU ID`) %>% as.matrix() %>% t()
+
+otu_tab <- otus_raw %>% dplyr::select(-`#OTU ID`) %>% as.matrix() %>% t()
 colnames(otu_tab) <- otus_raw$`#OTU ID`
 ```
 
@@ -73,13 +74,13 @@ plot_mds_abarca(base_mds, mapping, aligned_samples = mds_samples_rarefy)
 ```
 
 ```{r, message=FALSE, results="hide"}
-mds_samples_dm <- sample_posterior_dm_all(20, otu_tab, prior = "ml",N_draws = "original") %>% apply_per_sample(nmds_func) %>% purrr::map(vegan::procrustes, X = base_mds)
+mds_samples_dm <- sample_posterior_dm(20, otu_tab, prior = "ml",N_draws = "original") %>% apply_per_sample(nmds_func) %>% purrr::map(vegan::procrustes, X = base_mds)
 
 plot_mds_abarca(base_mds, mapping, aligned_samples = mds_samples_dm)
 ```
 
 ```{r}
-mds_samples_dm_mds <- sample_posterior_dm_all(20, otu_tab, prior = "ml") %>% metaMDS_per_sample() %>% purrr::map(vegan::procrustes, X = base_meta_mds)
+mds_samples_dm_mds <- sample_posterior_dm(20, otu_tab, prior = "ml") %>% metaMDS_per_sample() %>% purrr::map(vegan::procrustes, X = base_meta_mds)
 
 
 plot_mds_abarca(base_meta_mds, mapping, aligned_samples = mds_samples_dm_mds)

@@ -91,7 +91,7 @@ plot_mds_tijana(base_classical_mds, aligned_samples = aligned_samples_classical_
 
 ```{r}
 set.seed(134524223)
-#resampled_otu <- sample_posterior_dm_all(10, t_otutab, prior = 0.5, N_draws = "original") 
+#resampled_otu <- sample_posterior_dm(10, t_otutab, prior = 0.5, N_draws = "original") 
 resampled_otu <- sample_posterior_dm_all(20, t_otutab, prior = "ml", N_draws = "original")
 resampled_mds <- metaMDS_per_sample(resampled_otu, trymax = 50) 
 resampled_mds_aligned <- resampled_mds %>% purrr::map(vegan::procrustes, X = base_mds)

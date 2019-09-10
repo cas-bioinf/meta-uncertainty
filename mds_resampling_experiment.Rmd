@@ -1,0 +1,155 @@
+---
+title: "MDS Subsampling experiment"
+output: html_notebook
+---
+
+
+```{r setup}
+devtools::load_all()
+library(tidyverse)
+library(readxl)
+library(here)
+library(cowplot)
+output_dir <- here::here("local_temp_data")
+if(!dir.exists(output_dir)) {
+  dir.create(output_dir)
+}
+```
+
+
+```{r load data}
+datasets <- list()
+
+otus_raw <- read.csv(here("private_data","Dunthorn2017.txt"), stringsAsFactors = FALSE, sep = "\t")
+#otu_tab <- otus_raw %>% as.data.frame() %>% column_to_rownames("X__1") %>% as.matrix()
+otu_tab <- otus_raw %>% select(B005_B006:T199_T200) %>% as.matrix() %>% t()
+otu_tab <- otu_tab[rowSums(otu_tab) > 2000 & rownames(otu_tab) != "B005_B006",]
+
+mapping <- tibble(Sample = rownames(otu_tab)) %>% mutate(Origin = if_else(grepl("^B", Sample), "Panama", if_else(grepl("^L", Sample), "Costa Rica", "Ecuador")))
+
+```
+
+
+```{r}
+set.seed(85241201)
+stats_list <- list()
+
+N <- 50
+for(n in 1:N) {
+  n_samples <- sample(9:round(nrow(otu_tab) * 0.66), size = 1)
+  repeat {
+    samples_to_use <- sample(rownames(otu_tab), size = n_samples)
+    otu_tab_filtered <- otu_tab[samples_to_use,]
+    mapping_filtered <- mapping %>% filter(Sample %in% samples_to_use)
+    group_counts <- mapping_filtered %>% group_by(Origin) %>% summarise(count = n())
+    
+    #Rejection sampling for at least rough balance
+    if(nrow(group_counts) == 3 && all(group_counts$count > 2)) {
+      break;
+    }
+  }
+  
+  sens_check <- mds_sensitivity_dm_check(20, otu_tab_filtered, mapping_filtered, group_column = Origin, trace = 0, trymax = 400, maxit = 500)
+  
+  plot_mds_only <- plot_mds(sens_check$base_mds, mapping_filtered, shape_aes = Origin, color_aes = Origin)
+  name <- sprintf("dunthorn_%02d", n)
+  ggsave(paste0(output_dir,"/", name, "_a.png"), plot_mds_only, width = 7, height = 5)
+  
+  plot_mds_sampling <- plot_mds(sens_check$base_mds, mapping_filtered, aligned_samples =  sens_check$resampled_aligned_mds, shape_aes = Origin, color_aes = Origin)
+  ggsave(paste0(output_dir,"/", name, "_b.png"), plot_mds_sampling, width = 7, height = 5)
+
+  ggsave(paste0(output_dir,"/", name, "_c.png"), plot_mds_sampling + facet_wrap(~Origin, ncol = 2), width = 14, height = 10)
+  stats_list[[n]] <- data.frame(name = name, n_samples = n_samples) %>% crossing(sens_check$connectivity_stats)
+}
+
+stats_list %>% do.call(rbind, .) %>% write.csv(file = paste0(output_dir,"/stats.csv"))
+data.frame(name = sprintf("dunthorn_%02d", 1:N)) %>% write.csv(file = paste0(output_dir,"/prompts.csv"))
+                                               
+```
+
+```{r}
+results_raw <- read_excel(here::here("MDS Experiment Pilot.xlsx"), sheet = "Resamples", range = "A1:M20") 
+results <- results_raw %>%
+  filter(!is.na(Name), !grepl("^`", Name)) %>%
+  column_to_rownames("Name") %>%
+  t() %>% as.data.frame() %>%
+  rownames_to_column("Name")
+
+stats <- read_csv(file = paste0(output_dir,"/stats.csv"))
+
+
+full <- tibble(
+`N blue clusters low` = 2, 
+`N blue clusters high` = 3, 
+`N red clusters low` = 1, 
+`N red clusters high` = 2, 
+`N green clusters low` = 1, 
+`N green clusters high` = 1, 
+`Blue split` = 5, 
+`Blue-green overlap` = 1, 
+`Blue-red overlap` = 2, 
+`Red-green overlap` = 1, 
+`Red is consistent` = 4, 
+`Green is consistent` = 4, 
+`Blue is consistent` = 2, 
+`Red is connected` = 3, 
+`Green is connected` = 5, 
+`Blue is connected` = 4)
+
+
+```
+
+```{r}
+stats_summarised <- stats %>% 
+  group_by(name) %>% 
+  summarise(n_samples = unique(n_samples),
+            min_connectivity_min = min(connectivity_min),
+            min_connectivity_average = min(connectivity_average)
+            )
+
+results_metrics <- results %>% 
+  mutate(cluster_mismatch = 
+           abs(`N blue clusters low` - full$`N blue clusters low`) +
+           abs(`N blue clusters high` - full$`N blue clusters high`) +
+           abs(`N red clusters low` - full$`N red clusters low`) +
+           abs(`N red clusters high` - full$`N red clusters high`) +
+           abs(`N green clusters low` - full$`N green clusters low`) +
+           abs(`N green clusters high` - full$`N green clusters high`),
+         connected_total = `Blue is connected` + `Red is connected` + `Green is connected`,
+         consistent_total = `Blue is consistent` + `Red is consistent` + `Green is consistent`
+         )
+         
+results_stats <- results_metrics %>% inner_join(stats_summarised, by = c("Name" = "name"))  
+```
+
+```{r}
+my_plot <- function(data, x,y) {
+  x <- enquo(x)
+  y <- enquo(y)
+  ggplot(data, aes(!!x, !!y)) + geom_jitter(width = 0, height = 0.3) + geom_smooth(method = "lm")
+}
+
+results_stats %>% my_plot(n_samples, cluster_mismatch)
+results_stats %>% my_plot(n_samples, min_connectivity_average)
+results_stats %>% my_plot(n_samples, min_connectivity_min)
+results_stats %>% my_plot(min_connectivity_average, cluster_mismatch)
+results_stats %>% my_plot(min_connectivity_min, cluster_mismatch)
+results_stats %>% my_plot(connected_total, cluster_mismatch)
+results_stats %>% my_plot(consistent_total, cluster_mismatch)
+
+results_stats %>% my_plot(connected_total, min_connectivity_average)
+results_stats %>% my_plot(connected_total, min_connectivity_min)
+
+
+results_stats %>% my_plot(n_samples, `Blue split`)
+results_stats %>% my_plot(min_connectivity_average, `Blue split`)
+results_stats %>% my_plot(min_connectivity_min, `Blue split`)
+results_stats %>% my_plot(connected_total, `Blue split`)
+results_stats %>% my_plot(consistent_total, `Blue split`)
+
+results_stats %>% my_plot(consistent_total, connected_total)
+
+results_stats %>% ggplot( aes(min_connectivity_average, cluster_mismatch, color = consistent_total)) + geom_jitter(width = 0, height = 0.3) + geom_smooth(method = "lm")
+
+```
+

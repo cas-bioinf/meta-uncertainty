@@ -45,22 +45,31 @@ plot_mds_dunthorn <- function(base_mds, mapping, aligned_samples = NULL, show_pa
 
 ```{r}
 set.seed(20190514)
-base_mds <- otu_tab %>% metaMDS(trymax = 400, maxit = 500, parallel = 1)
+base_mds <- otu_tab %>% metaMDS(trymax = 400, maxit = 500, trace = 0)
 #base_mds$points
 plot_mds_dunthorn(base_mds, mapping)
 ```
 
+```{r}
+sens <- mds_sensitivity_dm_check(20, otu_tab, mapping, group_column = Origin, trace = 0, trymax = 400, maxit = 500)
+plot(sens,color_aes = Origin, shape_aes = Origin, sample_point_alpha = 0.2)
+sens$connectivity_stats
+```
+
 
 ```{r, message=FALSE, results="hide"}
-mds_samples_dm <- sample_posterior_dm_all(20, otu_tab, prior = "ml",N_draws = "original") %>% 
+mds_samples_dm <- sample_posterior_dm(20, otu_tab, prior = "ml",N_draws = "original") %>% 
   metaMDS_per_sample(trymax = 400, maxit = 500) %>% purrr::map(vegan::procrustes, X = base_mds)
 
+# mds_samples_dm_large <- sample_posterior_dm(100, otu_tab, prior = "ml",N_draws = "original") %>% 
+#   metaMDS_per_sample(trymax = 400, maxit = 500) %>% purrr::map(vegan::procrustes, X = base_mds)
 
 
 ```
 
 ```{r}
 plot_mds_dunthorn(base_mds, mapping, aligned_samples = mds_samples_dm)
+plot_mds_dunthorn(base_mds, mapping, aligned_samples = mds_samples_dm_large)
 plot_mds_dunthorn(base_mds, mapping, aligned_samples = mds_samples_dm) + facet_wrap(~Origin)
 ```
 
@@ -92,7 +101,7 @@ for(i in 1:5) {
   otu_tab_filtered <- otu_tab[samples_to_use,]
   
   base_mds_filtered <- otu_tab_filtered %>% metaMDS(trymax = 400, maxit = 500, parallel = 1, trace = 0)
-  mds_samples_dm_filtered <- sample_posterior_dm_all(20, otu_tab_filtered, prior = "ml",N_draws = "original") %>% 
+  mds_samples_dm_filtered <- sample_posterior_dm(20, otu_tab_filtered, prior = "ml",N_draws = "original") %>% 
     metaMDS_per_sample(trymax = 400, maxit = 500) %>% purrr::map(vegan::procrustes, X = base_mds_filtered)
   
   pl <- plot_mds_dunthorn(base_mds_filtered, mapping, aligned_samples = mds_samples_dm_filtered, show_paths = "all") 
@@ -114,7 +123,7 @@ for(i in 1:5) {
   otu_tab_filtered <- otu_tab[samples_to_use,]
   
   base_mds_filtered <- otu_tab_filtered %>% metaMDS(trymax = 400, maxit = 500, parallel = 1, trace = 0)
-  mds_samples_dm_filtered <- sample_posterior_dm_all(20, otu_tab_filtered, prior = "ml",N_draws = "original") %>% 
+  mds_samples_dm_filtered <- sample_posterior_dm(20, otu_tab_filtered, prior = "ml",N_draws = "original") %>% 
     metaMDS_per_sample(trymax = 400, maxit = 500) %>% purrr::map(vegan::procrustes, X = base_mds_filtered)
   
   pl <- plot_mds_dunthorn(base_mds_filtered, mapping, aligned_samples = mds_samples_dm_filtered, show_paths = "all") 
@@ -131,7 +140,7 @@ for(i in 1:5) {
   otu_tab_filtered <- otu_tab[samples_to_use,]
   
   base_mds_filtered <- otu_tab_filtered %>% metaMDS(trymax = 400, maxit = 500, parallel = 1, trace = 0)
-  mds_samples_dm_filtered <- sample_posterior_dm_all(20, otu_tab_filtered, prior = "ml",N_draws = "original") %>% 
+  mds_samples_dm_filtered <- sample_posterior_dm(20, otu_tab_filtered, prior = "ml",N_draws = "original") %>% 
     metaMDS_per_sample(trymax = 400, maxit = 500) %>% purrr::map(vegan::procrustes, X = base_mds_filtered)
   
   pl <- plot_mds_dunthorn(base_mds_filtered, mapping, aligned_samples = mds_samples_dm_filtered, show_paths = "all") 
@@ -150,7 +159,7 @@ vegdist(otu_tab[samples_to_test,])
 
 ```{r}
 sample_1 <- "L030"
-resampled <- sample_posterior_dm_all(20, otu_tab[sample_1, , drop = FALSE], prior = "ml",N_draws = "original")
+resampled <- sample_posterior_dm(20, otu_tab[sample_1, , drop = FALSE], prior = "ml",N_draws = "original")
 vegdist(rbind(otu_tab[sample_1, , drop = FALSE], resampled[,1,]))
 
 ```

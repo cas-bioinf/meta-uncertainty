@@ -2,7 +2,14 @@
 
 default_prior = "ml"
 
-dm_model <- stan_model(here("dm.stan"))
+dm_model <- NULL
+
+get_dm_model <- function() {
+  if(is.null(dm_model)) {
+    dm_model <- rstan::stan_model(paste0(path.package("metagenboot"),"/dm.stan"))
+  }
+  dm_model
+}
 
 rdirichlet_multinomial <- function(N, N_draws, alpha) {
   dirichlet_samples <- MCMCpack::rdirichlet(N, alpha)
@@ -15,7 +22,7 @@ dirichlet_multinomial_lpmf <- function(y, alpha) {
   }
   alpha_plus <-  sum(alpha);
   sum_y <- sum(y)
-  
+
   lgamma(sum_y + 1) + lgamma(alpha_plus) + sum(lgamma(alpha + y))
   - lgamma(alpha_plus+sum_y) - sum(lgamma(alpha)) - sum(lgamma(y + 1));
 }
@@ -44,11 +51,11 @@ alpha_guess_ml <- function(observed) {
 }
 
 alpha_guess_bayes <- function(N, observed) {
-  fit <- sampling(dm_model, data = list(N = length(observed), counts = observed),
+  fit <- sampling(get_dm_model(), data = list(N = length(observed), counts = observed),
                   iter = 1000 + max(N, 500), warmup = 1000)
   if(get_num_divergent(fit) > 0) {
     stop("divergences")
-  } 
+  }
   if(get_num_max_treedepth(fit) > 0) {
     stop("treedepth")
   }
@@ -62,7 +69,7 @@ alpha_guess_bayes <- function(N, observed) {
   if( s[,"n_eff"] < N / 2) {
     warning("Low n_eff when guessing alpha")
   }
-  
+
   rstan::extract(fit, pars = "alpha_prior")$alpha_prior[1:N]
 }
 
@@ -74,15 +81,15 @@ prepare_prior <- function(N, observed, prior) {
     }
   } else if(prior == "bayes") {
     prior <- alpha_guess_bayes(N, observed)
-  } else if(!is.numeric(prior) || 
+  } else if(!is.numeric(prior) ||
             (length(prior) != 1 && length(prior) != N)) {
     stop("Prior must be single number, vector of length N, 'ml' or 'bayes'")
   }
-  
+
   if(length(prior) == 1) {
     prior <- rep(prior, N)
   }
-  
+
   prior
 }
 
@@ -108,26 +115,27 @@ sample_posterior_dm_single <- function(N, observed, N_draws = sum(observed), pri
   } else if(!is.numeric(N_draws) || length(N_draws) != 1) {
     stop("N_draws must be single number or 'original'")
   }
-  
+
   dirichlet_draws <- get_dirichlet_draws(N, observed, prior)
   t(apply(dirichlet_draws, MARGIN = 1, FUN = function(x) { rmultinom(1, N_draws, x)[,1] }))
 }
 
 
 # Returns 3D array with dimensions N, nrow(observed_matrix), ncol(observed_matrix)
-sample_posterior_dm_all <- function(N, observed_matrix, N_draws = max(rowSums(observed_matrix)), 
+sample_posterior_dm <- function(N, observed_matrix, N_draws = "original",
                                     prior = default_prior) {
-  values_raw <- apply(observed_matrix, MARGIN = 1, FUN = function(x) { sample_posterior_dm_single(N, x, N_draws, prior) }) 
-  wrong_dim_order <- array(values_raw, c(N, ncol(observed_matrix) , nrow(observed_matrix)), 
+  #TODO check observed_matrix is just integers
+  values_raw <- apply(observed_matrix, MARGIN = 1, FUN = function(x) { sample_posterior_dm_single(N, x, N_draws, prior) })
+  wrong_dim_order <- array(values_raw, c(N, ncol(observed_matrix) , nrow(observed_matrix)),
         dimnames = list(paste0("S",1:N), colnames(observed_matrix), rownames(observed_matrix)))
   aperm(wrong_dim_order, c(1,3,2))
 }
 
 # Returns 3D array with dimensions N, nrow(observed_matrix), ncol(observed_matrix)
-sample_latent_dm_all <- function(N, observed_matrix,  
+sample_latent_dm <- function(N, observed_matrix,
                                     prior = default_prior) {
-  values_raw <- apply(observed_matrix, MARGIN = 1, FUN = function(x) { sample_latent_dm_single(N, x, prior) }) 
-  wrong_dim_order <- array(values_raw, c(N, ncol(observed_matrix) , nrow(observed_matrix)), 
+  values_raw <- apply(observed_matrix, MARGIN = 1, FUN = function(x) { sample_latent_dm_single(N, x, prior) })
+  wrong_dim_order <- array(values_raw, c(N, ncol(observed_matrix) , nrow(observed_matrix)),
                            dimnames = list(paste0("S",1:N), colnames(observed_matrix), rownames(observed_matrix)))
   aperm(wrong_dim_order, c(1,3,2))
 }
@@ -139,14 +147,14 @@ sample_posterior_DESeq2 <- function(N, observed_matrix, mapping, design) {
   dds <- estimateSizeFactors(dds, type = "poscounts")
   dds <- estimateDispersions(dds)
   dds <- nbinomWaldTest(dds)
-  
+
   n_otus <- ncol(observed_matrix)
   n_observations <- nrow(observed_matrix)
-  
+
   predicted_means <- 2^(coef(dds) %*% t(model.matrix(design, mapping ))) * matrix(rep(sizeFactors(dds), each = n_otus), n_otus, n_observations)
   dispersions <- matrix(rep(dispersions(dds), times = n_observations))
-  
-  res <- array(NA_integer_, c(N, n_observations, n_otus), 
+
+  res <- array(NA_integer_, c(N, n_observations, n_otus),
                dimnames = list(paste0("S",1:N), rownames(observed_matrix), colnames(observed_matrix)))
   for(n in 1:N) {
     res[n,,] <- t(matrix(
@@ -158,8 +166,8 @@ sample_posterior_DESeq2 <- function(N, observed_matrix, mapping, design) {
 sample_posterior_rarefy <- function(N, observed_matrix, min_depth = min(rowSums(observed_matrix))) {
   n_otus <- ncol(observed_matrix)
   n_observations <- nrow(observed_matrix)
-  
-  res <- array(NA_integer_, c(N, n_observations, n_otus), 
+
+  res <- array(NA_integer_, c(N, n_observations, n_otus),
                dimnames = list(paste0("S",1:N), rownames(observed_matrix), colnames(observed_matrix)))
   for(n in 1:N) {
     res[n,,] <- rrarefy(observed_matrix, min_depth)
@@ -172,7 +180,7 @@ sample_posterior_rarefy <- function(N, observed_matrix, min_depth = min(rowSums(
 flatten_posterior_samples <- function(posterior_samples, name.delim = "_") {
   dims <- dim(posterior_samples)
   flat <- matrix(posterior_samples, dims[1] * dims[2], dims[3])
-  combined_names <- expand.grid(dimnames(posterior_samples)[[1]], dimnames(posterior_samples)[[2]]) 
+  combined_names <- expand.grid(dimnames(posterior_samples)[[1]], dimnames(posterior_samples)[[2]])
   rownames(flat) <- paste0(combined_names[[2]], name.delim, combined_names[[1]])
   colnames(flat) <- dimnames(posterior_samples)[[3]]
   flat

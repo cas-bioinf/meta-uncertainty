@@ -16,4 +16,6 @@ Suggests:
 Imports: 
     rstan,
     vegan,
-    doParallel
+    doParallel,
+    MCMCpack,
+    igraph

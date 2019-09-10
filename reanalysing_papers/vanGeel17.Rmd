@@ -48,7 +48,7 @@ plot_mds_van_geel(base_mds, mapping) + facet_wrap(~type)
 
 
 ```{r, message=FALSE, results="hide"}
-mds_samples_dm <- sample_posterior_dm_all(20, otu_tab, prior = "ml",N_draws = "original") %>% 
+mds_samples_dm <- sample_posterior_dm(20, otu_tab, prior = "ml",N_draws = "original") %>% 
   metaMDS_per_sample(trymax = 100) %>% purrr::map(vegan::procrustes, X = base_mds)
 
 
@@ -61,10 +61,10 @@ plot_mds_van_geel(base_mds, mapping, aligned_samples = mds_samples_dm) + facet_w
 
 
 ```{r}
-groups <- data.frame(observation = rownames(base_mds$points)) %>% inner_join(mapping, by = c("observation" = "Sample")) %>% pull("type")
+groups <- data.frame(observation = rownames(base_mds$points)) %>% inner_join(mapping, by = c("observation" = "Sample")) %>% pull("grassland_type")
 
-connectivity_group(base_mds, mds_samples_dm)
-connectivity_all_groups(base_mds, mds_samples_dm, groups = groups)
+connectivity_group(base_mds$points, mds_samples_dm %>% purrr::map(~ .x$Yrot))
+connectivity_all_groups(base_mds$points, mds_samples_dm %>% purrr::map(~ .x$Yrot), groups = groups)
 ```
 
 
@@ -84,7 +84,7 @@ for(i in 1:5) {
   base_mds_filtered <- otu_tab_filtered %>% metaMDS(trymax = 100)
   # base_mds_filtered <- base_mds #otu_tab_filtered %>% metaMDS(trymax = 100)
   # base_mds_filtered$points <- base_mds$points[samples_to_use,]
-  mds_samples_dm_filtered <- sample_posterior_dm_all(20, otu_tab_filtered, prior = "ml",N_draws = "original") %>% 
+  mds_samples_dm_filtered <- sample_posterior_dm(20, otu_tab_filtered, prior = "ml",N_draws = "original") %>% 
     metaMDS_per_sample(trymax = 100) %>% purrr::map(vegan::procrustes, X = base_mds_filtered)
   
   plot <- plot_mds_van_geel(base_mds_filtered, mapping, aligned_samples = mds_samples_dm_filtered, show_paths = 0.5)  + facet_wrap(~type) 
@@ -101,7 +101,7 @@ for(i in 1:5) {
   
   base_mds_filtered <- base_mds #otu_tab_filtered %>% metaMDS(trymax = 100)
   base_mds_filtered$points <- base_mds$points[samples_to_use,]
-  mds_samples_dm_filtered <- sample_posterior_dm_all(20, otu_tab_filtered, prior = "ml",N_draws = "original") %>% 
+  mds_samples_dm_filtered <- sample_posterior_dm(20, otu_tab_filtered, prior = "ml",N_draws = "original") %>% 
     metaMDS_per_sample(trymax = 100) %>% purrr::map(vegan::procrustes, X = base_mds_filtered)
   
   plot <- plot_mds_van_geel(base_mds_filtered, mapping, aligned_samples = mds_samples_dm_filtered, show_paths = 0.5)  + facet_wrap(~type) 
