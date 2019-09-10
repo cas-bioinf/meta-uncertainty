@@ -175,9 +175,23 @@ sample_posterior_rarefy <- function(N, observed_matrix, min_depth = min(rowSums(
   res
 }
 
-#Turns value returned by `sample_posterior_dm_all` into a matrix of size N * nrow(observed_matrix), ncol(observed_matrix)
+sample_posterior_jackknife_observations <- function(observed_matrix) {
+  n_otus <- ncol(observed_matrix)
+  n_observations <- nrow(observed_matrix)
+
+  res <- list()
+  for(n in 1:n_observations) {
+    res[[n]] <- observed_matrix[-n,, drop = FALSE]
+  }
+  res
+}
+
+#Turns value returned by `sample_posterior_dm` into a matrix of size N * nrow(observed_matrix), ncol(observed_matrix)
 #Useful for clustering etc.
 flatten_posterior_samples <- function(posterior_samples, name.delim = "_") {
+  if(is.list(posterior_samples)) {
+    stop("flatten_posterior_samples not yet implemented for list samples")
+  }
   dims <- dim(posterior_samples)
   flat <- matrix(posterior_samples, dims[1] * dims[2], dims[3])
   combined_names <- expand.grid(dimnames(posterior_samples)[[1]], dimnames(posterior_samples)[[2]])
@@ -188,16 +202,25 @@ flatten_posterior_samples <- function(posterior_samples, name.delim = "_") {
 
 #FUN takes a vector of values for single observation and returns a single number
 summarise_posterior_per_observation <- function(posterior, FUN) {
+  if(is.list(posterior)) {
+    stop("summarise_posterior_per_observation not yet implemented for list samples")
+  }
   t(apply(posterior, MARGIN = c(1, 2), FUN = FUN))
 }
 
 #FUN takes a matrix of values for all observation and returns a vector number
 summarise_posterior_per_sample <- function(posterior, FUN) {
+  if(is.list(posterior)) {
+    stop("summarise_posterior_per_sample not yet implemented for list samples")
+  }
   apply(posterior, MARGIN = c(1), FUN = FUN)
 }
 
 #FUN takes a mtrix of values and returns any object - a list with result per sample is returned
 apply_per_sample <- function(posterior, FUN, ...) {
+  if(is.list(posterior)) {
+    stop("apply_per_sample not yet implemented for list samples")
+  }
   plyr::alply(posterior, .margins = 1, .fun = FUN, ...)
 }
 
@@ -205,18 +228,18 @@ summarise_posterior_richness <- function(posterior) {
   summarise_posterior_per_observation(posterior, function(x) { sum(x > 0) })
 }
 
-metaMDS_per_sample <- function(posterior, cores = parallel::detectCores(), ...) {
-  cl <- parallel::makePSOCKcluster(cores);
-  currentLibPaths <- .libPaths()
-  tryCatch({
-    parallel::clusterExport(cl, "currentLibPaths", environment())
-    parallel::clusterEvalQ(cl, .libPaths(currentLibPaths))
-    parallel::clusterExport(cl, "posterior", environment())
-    parallel::clusterEvalQ(cl, {library(vegan)})
-    parallel::parLapplyLB(cl, 1:(dim(posterior)[1]), 
-                          fun = function(i) {metaMDS(posterior[i,,], ...)}, 
-                          chunk.size = 1)
-  }, finally = {
-    stopCluster(cl)
-  })
+get_n_posterior_samples <- function(posterior) {
+  if(is.list(posterior)) {
+    n_samples <- length(posterior)
+  } else {
+    n_samples <- dim(posterior)[1]
+  }
+}
+
+get_posterior_sample <- function(posterior, sample_i) {
+  if(is.list(posterior)) {
+    posterior[[sample_i]]
+  } else {
+    posterior[sample_i,,]
+  }
 }

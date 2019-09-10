@@ -70,8 +70,14 @@ set.seed(13248455)
 base_mds <- metaMDS(t_otutab, trymax = 50)
 
 samples_rarefy <- sample_posterior_rarefy(20, t_otutab)
-aligned_samples_rarefy <- metaMDS_per_sample(samples_rarefy) %>% purrr::map(vegan::procrustes, X = base_mds)
+aligned_samples_rarefy <- metaMDS_per_sample(samples_rarefy) %>% purrr::map(align_single_MDS, base_mds = base_mds)
 plot_mds_tijana(base_mds, aligned_samples = aligned_samples_rarefy, mapping)
+```
+```{r}
+samples_jackknife <- sample_posterior_jackknife_observations(t_otutab)
+mds_jack <-  metaMDS_per_sample(samples_jackknife) 
+aligned_samples_jackknife <- mds_jack %>% purrr::map(align_single_MDS, base_mds = base_mds, allow_unmatched_observations = TRUE)
+plot_mds_tijana(base_mds, aligned_samples = aligned_samples_jackknife, mapping)
 ```
 
 
@@ -92,7 +98,7 @@ plot_mds_tijana(base_classical_mds, aligned_samples = aligned_samples_classical_
 ```{r}
 set.seed(134524223)
 #resampled_otu <- sample_posterior_dm(10, t_otutab, prior = 0.5, N_draws = "original") 
-resampled_otu <- sample_posterior_dm_all(20, t_otutab, prior = "ml", N_draws = "original")
+resampled_otu <- sample_posterior_dm(20, t_otutab, prior = "ml", N_draws = "original")
 resampled_mds <- metaMDS_per_sample(resampled_otu, trymax = 50) 
 resampled_mds_aligned <- resampled_mds %>% purrr::map(vegan::procrustes, X = base_mds)
 ```
@@ -110,7 +116,7 @@ selected_observations <- mapping %>% filter(SampleType == "Control", Soil == "Sp
 
 set.seed(1328454)
 t_otutab_filtered <- t_otutab[selected_observations,, drop = FALSE]
-resampled_otu_filtered <- sample_posterior_dm_all(20, t_otutab_filtered, prior = "ml", N_draws = "original")
+resampled_otu_filtered <- sample_posterior_dm(20, t_otutab_filtered, prior = "ml", N_draws = "original")
 
 base_mds_filtered <- metaMDS(t_otutab_filtered, trymax = 50)
 resampled_mds_filtered <- metaMDS_per_sample(resampled_otu_filtered, trymax = 50) 
@@ -124,7 +130,7 @@ plot_mds_tijana(base_mds_filtered, aligned_samples = resampled_mds_filtered_alig
 Testing DESeq2
 ```{r}
 set.seed(321485246)
-#resampled_otu <- sample_posterior_dm_all(10, t_otutab, prior = 0.5, N_draws = "original") 
+#resampled_otu <- sample_posterior_dm(10, t_otutab, prior = 0.5, N_draws = "original") 
 resampled_otu_deseq <- sample_posterior_DESeq2(20, t_otutab,  mapping, ~SoilSample)
 
 
@@ -143,7 +149,7 @@ DESEQ with each sample separate
 
 ```{r}
 set.seed(13584224)
-#resampled_otu <- sample_posterior_dm_all(10, t_otutab, prior = 0.5, N_draws = "original") 
+#resampled_otu <- sample_posterior_dm(10, t_otutab, prior = 0.5, N_draws = "original") 
 mappingV2 <- mapping %>% mutate(Cat = Replicate_no < 3, SoilSampleCat = interaction(SoilSample,Cat))
 resampled_otu_deseq_rep <- sample_posterior_DESeq2(20, t_otutab,  mappingV2, ~SoilSampleCat)
 resampled_otu_flat_deseq_rep <- flatten_posterior_samples(resampled_otu_deseq_rep)
@@ -218,8 +224,8 @@ Testing alternative priors, currently does not work
 
 ```{r}
 set.seed(32146588)
-#resampled_otu <- sample_posterior_dm_all(10, t_otutab, prior = 0.5, N_draws = "original") 
-resampled_otu_2 <- sample_posterior_dm_all(20, t_otutab, prior = 0.5, N_draws = "original")
+#resampled_otu <- sample_posterior_dm(10, t_otutab, prior = 0.5, N_draws = "original") 
+resampled_otu_2 <- sample_posterior_dm(20, t_otutab, prior = 0.5, N_draws = "original")
 resampled_otu_flat_2 <- flatten_posterior_samples(resampled_otu)
 
 resampled_mds_2 <- metaMDS(rbind(original_renamed, resampled_otu_flat_2), trymax = 50)
