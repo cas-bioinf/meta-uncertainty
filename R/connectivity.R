@@ -10,10 +10,22 @@ connectivity_matrix_direct_assymmetric <- function(base_points, aligned_samples_
   rownames(n_samples_far) <- rownames(base_points)
   colnames(n_samples_far) <- rownames(base_points)
   for(i in 1:n_samples) {
-    dist_to_samples <- sqrt(rowSums((base_points - aligned_samples_points[[i]]) ^ 2))
-    for(p in 1:n_points) {
-      is_further <- dist_to_samples >= base_distances[,p]
-      n_samples_far[,p] <- n_samples_far[,p] + is_further
+    if(nrow(base_points) == nrow(aligned_samples_points[[i]])) {
+      if(!is.null(rownames(base_points)) && !is.null(rownames(aligned_samples_points[[i]])) &&
+         !all(rownames(base_points) == rownames(aligned_samples_points[[i]]))) {
+        stop("Row names are inconsistent between base_points and aligned_samples_points")
+      }
+      points_present <- 1:n_points
+    } else {
+      points_present = rownames(aligned_samples_points[[i]])
+      if(!identical(intersect(points_present, rownames(base_points)), points_present)) {
+        stop("Some points in aligned_samples_points not found in base_points")
+      }
+    }
+    dist_to_samples <- sqrt(rowSums((base_points[points_present,] - aligned_samples_points[[i]]) ^ 2))
+    for(p in points_present) {
+      is_further <- dist_to_samples >= base_distances[points_present, p]
+      n_samples_far[points_present,p] <- n_samples_far[points_present, p] + is_further
     }
   }
   n_samples_far / n_samples
@@ -83,6 +95,8 @@ connectivity_stats_group <- function(base_points, aligned_samples_points) {
              connectivity_min, bottleneck_a = min_parent, bottleneck_b = min_kid)
 }
 
+#' @importFrom tidyr %>%
+#' @export
 connectivity_stats_all_groups <- function(base_points, aligned_samples_points, groups) {
   get_group_indices <- function(aligned_sample, group) {
     observation_names <- intersect(rownames(base_points)[groups == group], rownames(aligned_sample))
@@ -94,7 +108,7 @@ connectivity_stats_all_groups <- function(base_points, aligned_samples_points, g
       filtered_base <- base_points[groups == g, ]
       filtered_samples <- aligned_samples_points %>% purrr::map(get_group_indices, group = g)
       result <- connectivity_stats_group(filtered_base, filtered_samples) %>%
-        mutate(group = g) %>% select(group, everything())
+        dplyr::mutate(group = g) %>% dplyr::select(group, dplyr::everything())
       result$group <- g
       result
     }) %>%

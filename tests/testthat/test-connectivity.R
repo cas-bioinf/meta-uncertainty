@@ -54,3 +54,18 @@ test_that("connectivity for single group", {
   stats_group <- connectivity_stats_group(base_points, samples)
   expect_equal( stats_group$connectivity_min, 2/3)
 })
+
+
+test_that("Connectivity works with jackknife samples", {
+  set.seed(20191011)
+  base_points <-  matrix( rnorm(500), nrow = 50, ncol = 10)
+  rownames(base_points) <- as.character(1:50)
+  samples <- sample_posterior_jackknife_observations(base_points)
+  res <- connectivity_stats_all_groups(base_points, samples, c(1:3, sample(1:3, size = 7, replace = TRUE)))
+  expect_true(nrow(res) == 3)
+  expect_true(all(!is.na(res$group)))
+  expect_true(all(!is.na(res$connectivity_average)))
+  expect_true(all(!is.na(res$connectivity_min)))
+  expect_true(all(!is.na(res$bottleneck_a)))
+  expect_true(all(!is.na(res$bottleneck_b)))
+})
