@@ -84,10 +84,15 @@ connectivity_stats_group <- function(base_points, aligned_samples_points) {
 }
 
 connectivity_stats_all_groups <- function(base_points, aligned_samples_points, groups) {
+  get_group_indices <- function(aligned_sample, group) {
+    observation_names <- intersect(rownames(base_points)[groups == group], rownames(aligned_sample))
+    aligned_sample[observation_names, ]
+  }
+
   groups %>% unique() %>%
     purrr::map(function(g) {
       filtered_base <- base_points[groups == g, ]
-      filtered_samples <- aligned_samples_points %>% map( ~ .x[groups == g, ])
+      filtered_samples <- aligned_samples_points %>% purrr::map(get_group_indices, group = g)
       result <- connectivity_stats_group(filtered_base, filtered_samples) %>%
         mutate(group = g) %>% select(group, everything())
       result$group <- g

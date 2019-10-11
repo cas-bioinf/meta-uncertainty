@@ -183,6 +183,7 @@ sample_posterior_jackknife_observations <- function(observed_matrix) {
   for(n in 1:n_observations) {
     res[[n]] <- observed_matrix[-n,, drop = FALSE]
   }
+  attr(res, "observation_subset") <- TRUE
   res
 }
 
@@ -241,5 +242,14 @@ get_posterior_sample <- function(posterior, sample_i) {
     posterior[[sample_i]]
   } else {
     posterior[sample_i,,]
+  }
+}
+
+is_observation_subset <- function(posterior) {
+  attr_val <- attr(posterior, "observation_subset", exact = TRUE)
+  if(is.null(attr_val)) {
+    FALSE
+  } else {
+    attr_val
   }
 }

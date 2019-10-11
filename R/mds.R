@@ -13,9 +13,9 @@ metaMDS_per_sample <- function(posterior, cores = parallel::detectCores(), ...) 
   })
 }
 
-align_single_MDS <- function(mds_sample, base_mds, allow_unmatched_observations = FALSE) {
+align_single_MDS <- function(mds_sample, base_mds, allow_unaligned = FALSE) {
   if(!identical(rownames(vegan::scores(base_mds)), rownames(vegan::scores(mds_sample)))) {
-    if(!allow_unmatched_observations) {
+    if(!allow_unaligned) {
       stop("Observations are not aligned")
     }
     all_obs_base <- rownames(vegan::scores(base_mds))
@@ -28,8 +28,14 @@ align_single_MDS <- function(mds_sample, base_mds, allow_unmatched_observations 
 }
 
 
-mds_sensitivity_dm_check <- function(N_samples, observed_matrix, mapping, group_column = Group, id_column = Sample, N_draws = "original",
-                                     prior = default_prior, ...) {
+mds_sensitivity_check <- function(N_samples, observed_matrix, mapping,
+                                  group_column = Group,
+                                  id_column = Sample,
+                                  N_draws = "original",
+                                  prior = default_prior,
+                                  sampling_func = ~ sample_posterior_dm(N_samples, ., prior = prior, N_draws = N_draws),
+
+                                  ...) {
   if(!is.matrix(observed_matrix)) {
     stop("observed_matrix has to be a matrix")
   }
@@ -53,10 +59,12 @@ mds_sensitivity_dm_check <- function(N_samples, observed_matrix, mapping, group_
 
   base_mds <- observed_matrix %>% vegan::metaMDS(...)
 
-  samples_dm <- sample_posterior_dm(N_samples, observed_matrix, prior = prior, N_draws = N_draws)
+  sampling_func <- rlang::as_function(sampling_func)
+  samples <- sampling_func(observed_matrix)
 
-  resampled_aligned_mds <- samples_dm %>%
-    metaMDS_per_sample(...) %>% purrr::map(vegan::procrustes, X = base_mds)
+  resampled_aligned_mds <- samples %>%
+    metaMDS_per_sample(...) %>% purrr::map(align_single_MDS, base_mds = base_mds,
+                                           allow_unaligned = is_observation_subset(samples))
 
   connectivity_stats <- connectivity_stats_all_groups(base_mds$points,
                                                       resampled_aligned_mds %>% purrr::map(~ .x$Yrot),
@@ -64,7 +72,7 @@ mds_sensitivity_dm_check <- function(N_samples, observed_matrix, mapping, group_
 
   structure(
     list(base_mds = base_mds,
-         samples_dm = samples_dm,
+         samples = samples,
          resampled_aligned_mds = resampled_aligned_mds,
          mapping = mapping,
          group_column = group_column,
