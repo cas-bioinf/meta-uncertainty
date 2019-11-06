@@ -7,8 +7,6 @@ jackknife beta diversity (in QIIME jackknifed_beta_diversity.py) - works by simp
 
 - Use TweeDESeq for resampling
 
-- DistatisR umí MDS nad množinou matic
-
 - Parallel coordinates plots to show more dimensions
 
 - We can use the ANCOM model (which just ANOVA on the log ratios)

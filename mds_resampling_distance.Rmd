@@ -1,0 +1,92 @@
+---
+title: "MDS Subsampling experiment"
+output: html_notebook
+---
+
+
+```{r setup}
+devtools::load_all()
+library(tidyverse)
+library(readxl)
+library(here)
+library(cowplot)
+library(vegan)
+output_dir <- here::here("local_temp_data")
+if(!dir.exists(output_dir)) {
+  dir.create(output_dir)
+}
+```
+
+
+```{r load data}
+datasets <- list()
+
+otus_raw <- read.csv(here("private_data","Dunthorn2017.txt"), stringsAsFactors = FALSE, sep = "\t")
+#otu_tab <- otus_raw %>% as.data.frame() %>% column_to_rownames("X__1") %>% as.matrix()
+otu_tab <- otus_raw %>% select(B005_B006:T199_T200) %>% as.matrix() %>% t()
+otu_tab <- otu_tab[rowSums(otu_tab) > 2000 & rownames(otu_tab) != "B005_B006",]
+
+mapping <- tibble(Sample = rownames(otu_tab)) %>% mutate(Origin = if_else(grepl("^B", Sample), "Panama", if_else(grepl("^L", Sample), "Costa Rica", "Ecuador")))
+
+```
+
+
+```{r}
+set.seed(20191011)
+stats_list <- list()
+
+full_mds <- otu_tab %>% metaMDS(trymax = 100, trace = 0)
+
+
+N <- 30
+for(n in 1:N) {
+  #n_samples <- sample(9:round(nrow(otu_tab) * 0.66), size = 1)
+  n_samples <- 15
+  repeat {
+    samples_to_use <- sample(rownames(otu_tab), size = n_samples)
+    otu_tab_filtered <- otu_tab[samples_to_use,]
+    mapping_filtered <- mapping %>% filter(Sample %in% samples_to_use)
+    group_counts <- mapping_filtered %>% group_by(Origin) %>% summarise(count = n())
+    
+    #Rejection sampling for at least rough balance
+    if(nrow(group_counts) == 3 && all(group_counts$count > 2)) {
+      break;
+    }
+  }
+  
+  cat("Step", n, "\n")
+  sens_check <- mds_sensitivity_check(20, otu_tab_filtered, mapping_filtered, group_column = Origin, trace = 0, trymax = 100)
+  procrustes_to_full <- vegan::procrustes(full_mds$points[samples_to_use,], sens_check$base_mds)
+  
+  stats_list[[n]] <- sens_check$connectivity_stats %>%    
+    summarise(min_connectivity_min = min(connectivity_min),
+            min_connectivity_average = min(connectivity_average),
+            avg_connectivity_min = mean(connectivity_min),
+            avg_connectivity_average = mean(connectivity_average)) %>%
+    mutate( n_samples = n_samples, rmse = sqrt(procrustes_to_full$ss / n_samples)) 
+}
+
+stats_list %>% do.call(rbind, .) %>% write.csv(file = paste0(output_dir,"/stats.csv"))
+```
+
+```{r}
+stats <- read_csv(file = paste0(output_dir,"/stats.csv"))
+```
+
+
+```{r}
+my_plot <- function(data, x,y) {
+  x <- enquo(x)
+  y <- enquo(y)
+  ggplot(data, aes(!!x, !!y)) + geom_jitter(width = 0, height = 0) + geom_smooth(method = "lm")
+}
+
+stats %>% my_plot(n_samples, rmse)
+stats %>% my_plot(min_connectivity_average, rmse)
+stats %>% my_plot(avg_connectivity_average, rmse)
+stats %>% my_plot(min_connectivity_min, rmse)
+stats %>% my_plot(avg_connectivity_min, rmse)
+
+
+```
+
