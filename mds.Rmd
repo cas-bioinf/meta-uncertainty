@@ -250,3 +250,5 @@ resampled_mds_latent$points %>% as.data.frame() %>% rownames_to_column("observat
   inner_join(mapping %>% mutate(Sample = as.character(Sample)), by =c("observation" = "Sample")) %>%
   ggplot(aes(MDS1, MDS2, color = SampleType, shape = Soil) + geom_point() 
 ```
+
+

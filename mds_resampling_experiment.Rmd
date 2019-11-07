@@ -11,6 +11,7 @@ library(readxl)
 library(here)
 library(cowplot)
 output_dir <- here::here("local_temp_data")
+output_dir <- here::here("local_temp_data", "jackknife")
 if(!dir.exists(output_dir)) {
   dir.create(output_dir)
 }
@@ -36,7 +37,7 @@ stats_list <- list()
 
 N <- 50
 for(n in 1:N) {
-  n_samples <- sample(9:round(nrow(otu_tab) * 0.66), size = 1)
+  n_samples <- sample(20:round(nrow(otu_tab) * 0.66), size = 1)
   repeat {
     samples_to_use <- sample(rownames(otu_tab), size = n_samples)
     otu_tab_filtered <- otu_tab[samples_to_use,]
@@ -44,12 +45,15 @@ for(n in 1:N) {
     group_counts <- mapping_filtered %>% group_by(Origin) %>% summarise(count = n())
     
     #Rejection sampling for at least rough balance
-    if(nrow(group_counts) == 3 && all(group_counts$count > 2)) {
+    #if(nrow(group_counts) == 3 && all(group_counts$count > 2)) {
+    if(nrow(group_counts) == 3 && all(group_counts$count > 5)) {
       break;
     }
   }
   
-  sens_check <- mds_sensitivity_dm_check(20, otu_tab_filtered, mapping_filtered, group_column = Origin, trace = 0, trymax = 400, maxit = 500)
+  sens_check <- mds_sensitivity_check(20, otu_tab_filtered, mapping_filtered, 
+                                      group_column = Origin, trace = 0, trymax = 400, maxit = 500,
+                                      sampling_func = sample_posterior_jackknife_observations)
   
   plot_mds_only <- plot_mds(sens_check$base_mds, mapping_filtered, shape_aes = Origin, color_aes = Origin)
   name <- sprintf("dunthorn_%02d", n)

@@ -32,13 +32,13 @@ mapping <- tibble(Sample = rownames(otu_tab)) %>% mutate(Origin = if_else(grepl(
 
 
 ```{r}
-set.seed(20191011)
+set.seed(20191107)
 stats_list <- list()
 
-full_mds <- otu_tab %>% metaMDS(trymax = 100, trace = 0)
+full_mds <- otu_tab %>% metaMDS(trymax = 50, trace = 0)
 
 
-N <- 30
+N <- 200
 for(n in 1:N) {
   #n_samples <- sample(9:round(nrow(otu_tab) * 0.66), size = 1)
   n_samples <- 15
@@ -55,7 +55,7 @@ for(n in 1:N) {
   }
   
   cat("Step", n, "\n")
-  sens_check <- mds_sensitivity_check(20, otu_tab_filtered, mapping_filtered, group_column = Origin, trace = 0, trymax = 100)
+  sens_check <- mds_sensitivity_check(20, otu_tab_filtered, mapping_filtered, group_column = Origin, trace = 0, trymax = 50)
   procrustes_to_full <- vegan::procrustes(full_mds$points[samples_to_use,], sens_check$base_mds)
   
   stats_list[[n]] <- sens_check$connectivity_stats %>%    
@@ -63,7 +63,8 @@ for(n in 1:N) {
             min_connectivity_average = min(connectivity_average),
             avg_connectivity_min = mean(connectivity_min),
             avg_connectivity_average = mean(connectivity_average)) %>%
-    mutate( n_samples = n_samples, rmse = sqrt(procrustes_to_full$ss / n_samples)) 
+    mutate( n_samples = n_samples, rmse = sqrt(procrustes_to_full$ss / n_samples)) %>%
+    crossing(sens_check$consistency_stats)
 }
 
 stats_list %>% do.call(rbind, .) %>% write.csv(file = paste0(output_dir,"/stats.csv"))
@@ -87,6 +88,12 @@ stats %>% my_plot(avg_connectivity_average, rmse)
 stats %>% my_plot(min_connectivity_min, rmse)
 stats %>% my_plot(avg_connectivity_min, rmse)
 
+
+```
+
+```{r}
+stats %>% my_plot(consistency_location, rmse)
+stats %>% my_plot(consistency_angles, rmse)
 
 ```
 

@@ -18,4 +18,6 @@ Imports:
     vegan,
     doParallel,
     MCMCpack,
-    igraph
+    igraph,
+    rlang,
+    tidyr

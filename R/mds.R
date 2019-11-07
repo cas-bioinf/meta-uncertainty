@@ -66,9 +66,13 @@ mds_sensitivity_check <- function(N_samples, observed_matrix, mapping,
     metaMDS_per_sample(...) %>% purrr::map(align_single_MDS, base_mds = base_mds,
                                            allow_unaligned = is_observation_subset(samples))
 
+  aligned_samples_points <- resampled_aligned_mds %>% purrr::map(~ .x$Yrot)
   connectivity_stats <- connectivity_stats_all_groups(base_mds$points,
-                                                      resampled_aligned_mds %>% purrr::map(~ .x$Yrot),
+                                                      aligned_samples_points,
                                                       group_values)
+
+  consistency_location <- consistency_location(base_mds$points, aligned_samples_points)
+  consistency_angles <- consistency_angles(base_mds$points, aligned_samples_points)
 
   structure(
     list(base_mds = base_mds,
@@ -77,7 +81,8 @@ mds_sensitivity_check <- function(N_samples, observed_matrix, mapping,
          mapping = mapping,
          group_column = group_column,
          group_values = group_values,
-         connectivity_stats = connectivity_stats
+         connectivity_stats = connectivity_stats,
+         consistency_stats = data.frame(consistency_location = consistency_location, consistency_angles = consistency_angles)
          ),
     class = "mds_sensitivity"
   )

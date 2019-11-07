@@ -51,9 +51,14 @@ plot_mds_dunthorn(base_mds, mapping)
 ```
 
 ```{r}
-sens <- mds_sensitivity_dm_check(20, otu_tab, mapping, group_column = Origin, trace = 0, trymax = 400, maxit = 500)
+sens <- mds_sensitivity_check(20, otu_tab, mapping, group_column = Origin, trace = 0, trymax = 50)
 plot(sens,color_aes = Origin, shape_aes = Origin, sample_point_alpha = 0.2)
 sens$connectivity_stats
+sens$consistency_stats
+```
+
+```{r}
+aligned_samples_points <- sens$resampled_aligned_mds %>% purrr::map(~ .x$Yrot)
 ```
 
 
