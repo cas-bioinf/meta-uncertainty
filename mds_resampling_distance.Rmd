@@ -97,3 +97,54 @@ stats %>% my_plot(consistency_angles, rmse)
 
 ```
 
+
+```{r}
+otus_raw_geel <- read_excel(here("private_data","vanGeel2017.xlsx"), sheet = "Sample OTU matrix")
+otu_tab_geel <- otus_raw_geel %>% select(OTU_16:OTU_5257) %>% as.matrix()
+
+mapping_geel <- otus_raw_geel %>% select(species_id:plot) %>% mutate(Sample = paste0("S_",1:n()), type = if_else(species_id == "soil", "Soil", "Root"))
+
+rownames(otu_tab_geel) <- mapping_geel$Sample
+
+```
+
+
+```{r}
+set.seed(201911072)
+stats_list <- list()
+
+full_mds <- otu_tab_geel %>% metaMDS(trymax = 50, trace = 0)
+
+
+N <- 200
+for(n in 1:N) {
+  n_samples <- 15
+  repeat {
+    samples_to_use <- sample(rownames(otu_tab_geel), size = n_samples)
+    otu_tab_filtered <- otu_tab_geel[samples_to_use,]
+    mapping_filtered <- mapping_geel %>% filter(Sample %in% samples_to_use) %>% droplevels()
+
+    group_counts <- mapping_filtered %>% group_by(grassland_type) %>% summarise(count = n())
+    
+    #Rejection sampling for at least rough balance
+    if(nrow(group_counts) == 2 && all(group_counts$count > 2)) {
+      break;
+    }
+  }
+
+  cat("Step", n, "\n")
+  sens_check <- mds_sensitivity_check(20, otu_tab_filtered, mapping_filtered, group_column = grassland_type, trace = 0, trymax = 50)
+  procrustes_to_full <- vegan::procrustes(full_mds$points[samples_to_use,], sens_check$base_mds)
+  
+  stats_list[[n]] <- sens_check$connectivity_stats %>%    
+    summarise(min_connectivity_min = min(connectivity_min),
+            min_connectivity_average = min(connectivity_average),
+            avg_connectivity_min = mean(connectivity_min),
+            avg_connectivity_average = mean(connectivity_average)) %>%
+    mutate( n_samples = n_samples, rmse = sqrt(procrustes_to_full$ss / n_samples)) %>%
+    crossing(sens_check$consistency_stats)
+}
+
+stats_list %>% do.call(rbind, .) %>% write.csv(file = paste0(output_dir,"/stats_geel.csv"))
+```
+

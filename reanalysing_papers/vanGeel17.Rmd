@@ -18,7 +18,6 @@ library(doParallel)
 library(readxl)
 
 options(mc.cores = parallel::detectCores())
-rstan_options(auto_write = TRUE)
 devtools::load_all()
 registerDoParallel(parallel::detectCores())
 ```
@@ -44,6 +43,7 @@ plot_mds_van_geel <- function(base_mds, mapping, aligned_samples = NULL, show_pa
 set.seed(201905103)
 base_mds <- otu_tab %>% metaMDS(trymax = 100, parallel = 1)
 plot_mds_van_geel(base_mds, mapping) + facet_wrap(~type)
+plot_mds_van_geel(base_mds, mapping)
 ```
 
 

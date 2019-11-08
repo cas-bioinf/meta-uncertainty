@@ -46,7 +46,10 @@ compute_angles <- function(points) {
     stop("Can't compute angles with < 3 points")
   }
   n_angles <- (n_points * (n_points - 1) * (n_points - 2)) / 2
-  angles <- array(NA_real_, n_angles)
+  centers <- array(NA_integer_, n_angles)
+  edges1 <- array(NA_integer_, n_angles)
+  edges2 <- array(NA_integer_, n_angles)
+
   next_angle <- 1
   for(center in 1:n_points) {
     for(edge1_raw in 2:(n_points - 1)) {
@@ -56,28 +59,31 @@ compute_angles <- function(points) {
       else {
         edge1 <- edge1_raw
       }
-      for(edge2_raw in 1:(edge1_raw - 1)) {
-        if(edge2_raw >=center) {
-          edge2 <- edge2_raw + 1
-        }
-        else {
-          edge2 <- edge2_raw
-        }
-        v1 <- points[edge1,] - points[center, ]
-        v2 <- points[edge2,] - points[center, ]
-        norm1 <- sqrt(sum(v1 ^ 2))
-        norm2 <- sqrt(sum(v2 ^ 2))
-        normalized_dot_product <- sum((v1 / norm1) * (v2 / norm2))
-        if(norm1 > 0 && norm2 > 0) {
-          angles[next_angle] <- acos(normalized_dot_product)
-        } else {
-          angles[next_angle] <- 0
-        }
-        next_angle <- next_angle + 1
+
+      segment_end <- next_angle + edge1_raw - 2
+      centers[next_angle:segment_end] <- center
+      edges1[next_angle:segment_end] <- edge1
+
+      if(center == 1) {
+        edges2[next_angle:segment_end] <- 2:edge1_raw
+      } else if(center > edge1_raw - 1) {
+        edges2[next_angle:segment_end] <- 1:(edge1_raw - 1)
+      } else {
+        edges2[next_angle:(next_angle + center - 2)] <- 1:(center-1)
+        edges2[(next_angle + center - 1):segment_end] <- (center + 1):(edge1 - 1)
       }
+
+      next_angle <- segment_end + 1
     }
   }
-  angles
+
+  v1 <- points[edges1,] - points[centers,]
+  v2 <- points[edges2,] - points[centers,]
+  norm <- sqrt(rowSums(v1 * v1) * rowSums(v2 * v2))
+  normalized_dot_product <- ifelse(norm == 0, 1, rowSums(v1 * v2) / norm)
+
+
+  acos(normalized_dot_product)
 }
 
 #' @export
