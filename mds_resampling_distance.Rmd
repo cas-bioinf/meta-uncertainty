@@ -148,3 +148,13 @@ for(n in 1:N) {
 stats_list %>% do.call(rbind, .) %>% write.csv(file = paste0(output_dir,"/stats_geel.csv"))
 ```
 
+```{r}
+stats_geel <- read_csv(file = paste0(output_dir,"/stats_geel.csv"))
+
+```
+
+```{r}
+stats_geel %>% my_plot(consistency_location, rmse)
+stats_geel %>% my_plot(consistency_angles, rmse) 
+stats_geel %>% my_plot(consistency_angles, avg_connectivity_average) 
+```
