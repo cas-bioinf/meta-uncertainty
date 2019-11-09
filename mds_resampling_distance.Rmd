@@ -33,68 +33,53 @@ mapping <- tibble(Sample = rownames(otu_tab)) %>% mutate(Origin = if_else(grepl(
 
 ```{r}
 set.seed(20191107)
-stats_list <- list()
 
-full_mds <- otu_tab %>% metaMDS(trymax = 50, trace = 0)
+experiment_dunthorn <- run_mds_experiment(otu_tab = otu_tab,
+                   n_samples_to_use = 15,
+                   n_steps = 100,
+                   mapping = mapping,
+                   group_column = Origin,
+                   accept_samples_func = function(mapping_filtered) {
+                      group_counts <- mapping_filtered %>% group_by(Origin) %>% summarise(count = n())
+                      nrow(group_counts) == 3 && all(group_counts$count > 2)
+                   })
 
 
-N <- 200
-for(n in 1:N) {
-  #n_samples <- sample(9:round(nrow(otu_tab) * 0.66), size = 1)
-  n_samples <- 15
-  repeat {
-    samples_to_use <- sample(rownames(otu_tab), size = n_samples)
-    otu_tab_filtered <- otu_tab[samples_to_use,]
-    mapping_filtered <- mapping %>% filter(Sample %in% samples_to_use)
-    group_counts <- mapping_filtered %>% group_by(Origin) %>% summarise(count = n())
-    
-    #Rejection sampling for at least rough balance
-    if(nrow(group_counts) == 3 && all(group_counts$count > 2)) {
-      break;
-    }
-  }
-  
-  cat("Step", n, "\n")
-  sens_check <- mds_sensitivity_check(20, otu_tab_filtered, mapping_filtered, group_column = Origin, trace = 0, trymax = 50)
-  procrustes_to_full <- vegan::procrustes(full_mds$points[samples_to_use,], sens_check$base_mds)
-  
-  stats_list[[n]] <- sens_check$connectivity_stats %>%    
-    summarise(min_connectivity_min = min(connectivity_min),
-            min_connectivity_average = min(connectivity_average),
-            avg_connectivity_min = mean(connectivity_min),
-            avg_connectivity_average = mean(connectivity_average)) %>%
-    mutate( n_samples = n_samples, rmse = sqrt(procrustes_to_full$ss / n_samples)) %>%
-    crossing(sens_check$consistency_stats)
-}
-
-stats_list %>% do.call(rbind, .) %>% write.csv(file = paste0(output_dir,"/stats.csv"))
+ experiment_dunthorn %>% write.csv(file = paste0(output_dir,"/stats_dunthorn.csv"))
 ```
 
 ```{r}
-stats <- read_csv(file = paste0(output_dir,"/stats.csv"))
+experiment_dunthorn <- read_csv(file = paste0(output_dir,"/stats_dunthorn.csv"))
 ```
 
 
 ```{r}
-my_plot <- function(data, x,y) {
+my_plot <- function(data, x,y, color = NULL) {
   x <- enquo(x)
   y <- enquo(y)
-  ggplot(data, aes(!!x, !!y)) + geom_jitter(width = 0, height = 0) + geom_smooth(method = "lm")
+  color <- enquo(color)
+  ggplot(data, aes(!!x, !!y, color = !!color)) + geom_jitter(width = 0, height = 0) + geom_smooth(method = "lm") + scale_color_distiller(palette = "Spectral")
 }
 
-stats %>% my_plot(n_samples, rmse)
-stats %>% my_plot(min_connectivity_average, rmse)
-stats %>% my_plot(avg_connectivity_average, rmse)
-stats %>% my_plot(min_connectivity_min, rmse)
-stats %>% my_plot(avg_connectivity_min, rmse)
+# stats %>% my_plot(n_samples, rmse)
+# stats %>% my_plot(min_connectivity_average, rmse)
+# stats %>% my_plot(avg_connectivity_average, rmse)
+# stats %>% my_plot(min_connectivity_min, rmse)
+# stats %>% my_plot(avg_connectivity_min, rmse)
 
 
 ```
 
 ```{r}
-stats %>% my_plot(consistency_location, rmse)
-stats %>% my_plot(consistency_angles, rmse)
-
+experiment_dunthorn %>% my_plot(consistency_location, rmse_location)
+experiment_dunthorn %>% my_plot(consistency_location, rmse_angles)
+experiment_dunthorn %>% my_plot(consistency_location, rmse_distances)
+experiment_dunthorn %>% my_plot(consistency_angles, rmse_location) 
+experiment_dunthorn %>% my_plot(consistency_angles, rmse_angles) 
+experiment_dunthorn %>% my_plot(consistency_angles, rmse_distances) 
+experiment_dunthorn %>% my_plot(consistency_pairwise_distances, rmse_location) 
+experiment_dunthorn %>% my_plot(consistency_pairwise_distances, rmse_angles) 
+experiment_dunthorn %>% my_plot(consistency_pairwise_distances, rmse_distances) 
 ```
 
 
@@ -111,50 +96,67 @@ rownames(otu_tab_geel) <- mapping_geel$Sample
 
 ```{r}
 set.seed(201911072)
-stats_list <- list()
 
-full_mds <- otu_tab_geel %>% metaMDS(trymax = 50, trace = 0)
+experiment_geel <- run_mds_experiment(otu_tab = otu_tab_geel,
+                   n_samples_to_use = 15,
+                   n_steps = 100,
+                   mapping = mapping_geel,
+                   group_column = grassland_type,
+                   accept_samples_func = function(mapping_filtered) {
+                      group_counts <- mapping_filtered %>% group_by(grassland_type) %>% summarise(count = n())
+                      nrow(group_counts) == 2 && all(group_counts$count > 2)
+                   }
+                   )
 
-
-N <- 200
-for(n in 1:N) {
-  n_samples <- 15
-  repeat {
-    samples_to_use <- sample(rownames(otu_tab_geel), size = n_samples)
-    otu_tab_filtered <- otu_tab_geel[samples_to_use,]
-    mapping_filtered <- mapping_geel %>% filter(Sample %in% samples_to_use) %>% droplevels()
-
-    group_counts <- mapping_filtered %>% group_by(grassland_type) %>% summarise(count = n())
-    
-    #Rejection sampling for at least rough balance
-    if(nrow(group_counts) == 2 && all(group_counts$count > 2)) {
-      break;
-    }
-  }
-
-  cat("Step", n, "\n")
-  sens_check <- mds_sensitivity_check(20, otu_tab_filtered, mapping_filtered, group_column = grassland_type, trace = 0, trymax = 50)
-  procrustes_to_full <- vegan::procrustes(full_mds$points[samples_to_use,], sens_check$base_mds)
-  
-  stats_list[[n]] <- sens_check$connectivity_stats %>%    
-    summarise(min_connectivity_min = min(connectivity_min),
-            min_connectivity_average = min(connectivity_average),
-            avg_connectivity_min = mean(connectivity_min),
-            avg_connectivity_average = mean(connectivity_average)) %>%
-    mutate( n_samples = n_samples, rmse = sqrt(procrustes_to_full$ss / n_samples)) %>%
-    crossing(sens_check$consistency_stats)
-}
-
-stats_list %>% do.call(rbind, .) %>% write.csv(file = paste0(output_dir,"/stats_geel.csv"))
+experiment_geel %>% write.csv(file = paste0(output_dir,"/stats_geel.csv"))
 ```
 
 ```{r}
-stats_geel <- read_csv(file = paste0(output_dir,"/stats_geel.csv"))
+experiment_geel <- read_csv(file = paste0(output_dir,"/stats_geel.csv"))
 
 ```
 
 ```{r}
-stats_geel %>% my_plot(consistency_location, rmse)
-stats_geel %>% my_plot(consistency_angles, rmse) 
-stats_geel %>% my_plot(consistency_angles, avg_connectivity_average) 
+experiment_geel %>% my_plot(consistency_location, rmse_location)
+experiment_geel %>% my_plot(consistency_location, rmse_angles)
+experiment_geel %>% my_plot(consistency_location, rmse_distances)
+experiment_geel %>% my_plot(consistency_angles, rmse_location) 
+experiment_geel %>% my_plot(consistency_angles, rmse_angles) 
+experiment_geel %>% my_plot(consistency_angles, rmse_distances) 
+experiment_geel %>% my_plot(consistency_pairwise_distances, rmse_location) 
+experiment_geel %>% my_plot(consistency_pairwise_distances, rmse_angles) 
+experiment_geel %>% my_plot(consistency_pairwise_distances, rmse_distances) 
+
 ```
+
+```{r}
+set.seed(201911072)
+
+experiment_geel_jn <- run_mds_experiment(otu_tab = otu_tab_geel,
+                   n_samples_to_use = 15,
+                   n_steps = 100,
+                   mapping = mapping_geel,
+                   group_column = grassland_type,
+                   accept_samples_func = function(mapping_filtered) {
+                      group_counts <- mapping_filtered %>% group_by(grassland_type) %>% summarise(count = n())
+                      nrow(group_counts) == 2 && all(group_counts$count > 2)
+                   },
+                   sampling_func = sample_posterior_jackknife_observations
+                   )
+
+experiment_geel_jn %>% write.csv(file = paste0(output_dir,"/stats_geel_jn.csv"))
+```
+
+```{r}
+experiment_geel_jn %>% my_plot(consistency_location, rmse_location)
+experiment_geel_jn %>% my_plot(consistency_location, rmse_angles)
+experiment_geel_jn %>% my_plot(consistency_location, rmse_distances)
+experiment_geel_jn %>% my_plot(consistency_angles, rmse_location) 
+experiment_geel_jn %>% my_plot(consistency_angles, rmse_angles) 
+experiment_geel_jn %>% my_plot(consistency_angles, rmse_distances) 
+experiment_geel_jn %>% my_plot(consistency_pairwise_distances, rmse_location) 
+experiment_geel_jn %>% my_plot(consistency_pairwise_distances, rmse_angles) 
+experiment_geel_jn %>% my_plot(consistency_pairwise_distances, rmse_distances) 
+
+```
+

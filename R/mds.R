@@ -73,6 +73,7 @@ mds_sensitivity_check <- function(N_samples, observed_matrix, mapping,
 
   consistency_location <- consistency_location(base_mds$points, aligned_samples_points)
   consistency_angles <- consistency_angles(base_mds$points, aligned_samples_points)
+  consistency_pairwise_distances <- consistency_pairwise_distances(base_mds$points, aligned_samples_points)
 
   structure(
     list(base_mds = base_mds,
@@ -82,7 +83,9 @@ mds_sensitivity_check <- function(N_samples, observed_matrix, mapping,
          group_column = group_column,
          group_values = group_values,
          connectivity_stats = connectivity_stats,
-         consistency_stats = data.frame(consistency_location = consistency_location, consistency_angles = consistency_angles)
+         consistency_stats = data.frame(consistency_location = consistency_location,
+                                        consistency_angles = consistency_angles,
+                                        consistency_pairwise_distances = consistency_pairwise_distances)
          ),
     class = "mds_sensitivity"
   )
