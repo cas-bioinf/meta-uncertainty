@@ -1,35 +1,48 @@
 ---
-title: "R Notebook"
+title: "Loading and analysing van Geel 2017 dataset"
 output: html_notebook
 ---
 
-From the paper "Variation in ectomycorrhizal fungal communities associated with Oreomunnea mexicana (Juglandaceae) in a Neotropical montane forest"
+From the paper "Abiotic rather than biotic filtering shapes the arbuscular mycorrhizal fungal communities of European seminatural grasslands"
 
-The data can be downloaded at https://link.springer.com/article/10.1007/s00572-015-0641-8
 
 
 ```{r setup}
-#library(MASS)
 library(tidyverse)
 library(here)
+library(readxl)
 library(vegan)
 library(cowplot)
-library(doParallel)
-library(readxl)
+theme_set(theme_cowplot())
 
-options(mc.cores = parallel::detectCores())
 devtools::load_all()
-registerDoParallel(parallel::detectCores())
+
+doParallel::registerDoParallel(parallel::detectCores())
 ```
 
+The data has to downloaded manually at https://nph.onlinelibrary.wiley.com/doi/abs/10.1111/nph.14947 - TableS2 and saved to `local_data/vanGeel2017.xlsx`
+
+
+```{r check_data}
+main_data_file <- here("local_data","vanGeel2017.xlsx")
+if(!file.exists(main_data_file)) {
+  stop(paste0("The file `", main_data_file, "` not found, you need to download it manually."))
+}
+```
+
+The important part - read and format the data so that rows are observations (biological samples) and columns are OTUs. Also gather basic information about the sampples (I call this "mapping" but maybe not a great name).
+
+
 ```{r load_data}
-otus_raw <- read_excel(here("private_data","vanGeel2017.xlsx"), sheet = "Sample OTU matrix")
+otus_raw <- read_excel(main_data_file, sheet = "Sample OTU matrix")
 otu_tab <- otus_raw %>% select(OTU_16:OTU_5257) %>% as.matrix()
 
 mapping <- otus_raw %>% select(species_id:plot) %>% mutate(Sample = paste0("S_",1:n()), type = if_else(species_id == "soil", "Soil", "Root"))
 
 rownames(otu_tab) <- mapping$Sample
 ```
+
+A custom plot function that wraps `plot_mds` and fixes some aesthetics that are reused - completely unnecessary, just convenient.
 
 
 ```{r}
@@ -41,71 +54,17 @@ plot_mds_van_geel <- function(base_mds, mapping, aligned_samples = NULL, show_pa
 
 ```{r}
 set.seed(201905103)
-base_mds <- otu_tab %>% metaMDS(trymax = 100, parallel = 1)
+base_mds <- otu_tab %>% metaMDS(trymax = 100, parallel = parallel::detectCores())
 plot_mds_van_geel(base_mds, mapping) + facet_wrap(~type)
 plot_mds_van_geel(base_mds, mapping)
 ```
 
-
-```{r, message=FALSE, results="hide"}
-mds_samples_dm <- sample_posterior_dm(20, otu_tab, prior = "ml",N_draws = "original") %>% 
-  metaMDS_per_sample(trymax = 100) %>% purrr::map(vegan::procrustes, X = base_mds)
-
-
-
-```
+Running the Dirichlet-multinomial bootstrap
 
 ```{r}
-plot_mds_van_geel(base_mds, mapping, aligned_samples = mds_samples_dm) + facet_wrap(~type)
-```
-
-
-```{r}
-groups <- data.frame(observation = rownames(base_mds$points)) %>% inner_join(mapping, by = c("observation" = "Sample")) %>% pull("grassland_type")
-
-connectivity_group(base_mds$points, mds_samples_dm %>% purrr::map(~ .x$Yrot))
-connectivity_all_groups(base_mds$points, mds_samples_dm %>% purrr::map(~ .x$Yrot), groups = groups)
-```
-
-
-```{r}
-plot_mds_van_geel(base_mds, mapping, aligned_samples = mds_samples_dm) + facet_wrap(~species_name_sci)
-
-```
-
-
-
-```{r, message=FALSE, results="hide"}
-set.seed(20190620)
-for(i in 1:5) {
-  samples_to_use <- mapping %>% group_by(type) %>% sample_n(10) %>% pull(Sample)
-  otu_tab_filtered <- otu_tab[samples_to_use,]
-  
-  base_mds_filtered <- otu_tab_filtered %>% metaMDS(trymax = 100)
-  # base_mds_filtered <- base_mds #otu_tab_filtered %>% metaMDS(trymax = 100)
-  # base_mds_filtered$points <- base_mds$points[samples_to_use,]
-  mds_samples_dm_filtered <- sample_posterior_dm(20, otu_tab_filtered, prior = "ml",N_draws = "original") %>% 
-    metaMDS_per_sample(trymax = 100) %>% purrr::map(vegan::procrustes, X = base_mds_filtered)
-  
-  plot <- plot_mds_van_geel(base_mds_filtered, mapping, aligned_samples = mds_samples_dm_filtered, show_paths = 0.5)  + facet_wrap(~type) 
-  print(plot)
-}
-
-```
-
-```{r, message=FALSE, results="hide"}
-set.seed(201906205)
-for(i in 1:5) {
-  samples_to_use <- mapping %>% group_by(type) %>% sample_n(20) %>% pull(Sample)
-  otu_tab_filtered <- otu_tab[samples_to_use,]
-  
-  base_mds_filtered <- base_mds #otu_tab_filtered %>% metaMDS(trymax = 100)
-  base_mds_filtered$points <- base_mds$points[samples_to_use,]
-  mds_samples_dm_filtered <- sample_posterior_dm(20, otu_tab_filtered, prior = "ml",N_draws = "original") %>% 
-    metaMDS_per_sample(trymax = 100) %>% purrr::map(vegan::procrustes, X = base_mds_filtered)
-  
-  plot <- plot_mds_van_geel(base_mds_filtered, mapping, aligned_samples = mds_samples_dm_filtered, show_paths = 0.5)  + facet_wrap(~type) 
-  print(plot)
-}
-
+#Here, group_column needs to be filled, it is needed for the connectivity metric (not directly using right now, but it is of interest). group_column should be the main factor in the data.
+sens <- mds_sensitivity_check(20, otu_tab, mapping, group_column = grassland_type, trace = 0)
+plot(sens,color_aes = grassland_type, show_paths = "none", sample_point_alpha = 0.1)
+sens$connectivity_stats
+sens$consistency_stats
 ```

@@ -1,5 +1,5 @@
 ---
-title: "R Notebook"
+title: "Loading and analysing Dunthorn 2017 dataset"
 output: html_document
 ---
 
@@ -11,37 +11,47 @@ The data can be downloaded at https://onlinelibrary.wiley.com/doi/abs/10.1111/17
 ```{r setup}
 library(tidyverse)
 library(here)
-library(vegan)
-library(cowplot)
-library(doParallel)
-library(readxl)
-library(rstan)
 
-options(mc.cores = parallel::detectCores())
-rstan_options(auto_write = TRUE)
+library(cowplot)
+theme_set(theme_cowplot())
 
 devtools::load_all()
 
-registerDoParallel(parallel::detectCores())
+doParallel::registerDoParallel(parallel::detectCores())
 ```
 
+Downloading data is preferably automatic, but can be replaced with instructions on how to download the data yourself.
+
+```{r download_data}
+main_data_file <- here("local_data", "Dunthorn2017.txt")
+if(!file.exists(main_data_file)) {
+   download.file("https://sfamjournals.onlinelibrary.wiley.com/action/downloadSupplement?doi=10.1111%2F1758-2229.12575&file=emi412575-sup-0001-suppinfo1.txt", main_data_file)
+
+}
+```
+
+The important part - read and format the data so that rows are observations (biological samples) and columns are OTUs. Also gather basic information about the sampples (I call this "mapping" but maybe not a great name).
+
 ```{r load_data}
-otus_raw <- read.csv(here("private_data","Dunthorn2017.txt"), stringsAsFactors = FALSE, sep = "\t")
-#otu_tab <- otus_raw %>% as.data.frame() %>% column_to_rownames("X__1") %>% as.matrix()
+otus_raw <- read.csv(main_data_file, stringsAsFactors = FALSE, sep = "\t")
 otu_tab <- otus_raw %>% select(B005_B006:T199_T200) %>% as.matrix() %>% t()
 otu_tab <- otu_tab[rowSums(otu_tab) > 2000 & rownames(otu_tab) != "B005_B006",]
 
+#Mapping hardcoded, could not bother parsing their file
 mapping <- tibble(Sample = rownames(otu_tab)) %>% mutate(Origin = if_else(grepl("^B", Sample), "Panama", if_else(grepl("^L", Sample), "Costa Rica", "Ecuador")))
 ```
 
 
+A custom plot function that wraps `plot_mds` and fixes some aesthetics that are reused - completely unnecessary, just convenient.
+
 ```{r}
 plot_mds_dunthorn <- function(base_mds, mapping, aligned_samples = NULL, show_paths = 0.5,  ...) {
-  plot_mds(base_mds, mapping, aligned_samples = aligned_samples, color_aes = Origin, shape_aes = Origin, show_paths = show_paths, sample_point_alpha = 0.2) #+ scale_y_continuous(trans = "reverse") + scale_x_continuous(trans = "reverse")
+  plot_mds(base_mds, mapping, aligned_samples = aligned_samples, color_aes = Origin, shape_aes = Origin, show_paths = show_paths, sample_point_alpha = 0.2) 
 }
 
 ```
 
+Basic MDS redoing the figure from the paper
 
 ```{r}
 set.seed(20190514)
@@ -50,13 +60,18 @@ base_mds <- otu_tab %>% metaMDS(trymax = 400, maxit = 500, trace = 0)
 plot_mds_dunthorn(base_mds, mapping)
 ```
 
+Running the Dirichlet-multinomial bootstrap
+
 ```{r}
+#Here, group_column needs to be filled, it is needed for the connectivity metric (not directly using right now, but it is of interest). group_column should be the main factor in the data.
 sens <- mds_sensitivity_check(20, otu_tab, mapping, group_column = Origin, trace = 0)
 plot(sens,color_aes = Origin, shape_aes = Origin, sample_point_alpha = 0.2)
 sens$connectivity_stats
 sens$consistency_stats
 ```
 
+
+Additional analyses that are not needed now
 
 ```{r}
 sens_jackknife <- mds_sensitivity_check(20, otu_tab, mapping, group_column = Origin, trace = 0, trymax = 50, sampling_func = sample_posterior_jackknife_observations)
@@ -66,114 +81,7 @@ plot(sens_jackknife,color_aes = Origin, shape_aes = Origin, sample_point_alpha =
 
 
 ```{r}
-aligned_samples_points <- sens$resampled_aligned_mds %>% purrr::map(~ .x$Yrot)
-```
-
-
-```{r, message=FALSE, results="hide"}
-mds_samples_dm <- sample_posterior_dm(20, otu_tab, prior = "ml",N_draws = "original") %>% 
-  metaMDS_per_sample(trymax = 400, maxit = 500) %>% purrr::map(vegan::procrustes, X = base_mds)
-
-# mds_samples_dm_large <- sample_posterior_dm(100, otu_tab, prior = "ml",N_draws = "original") %>% 
-#   metaMDS_per_sample(trymax = 400, maxit = 500) %>% purrr::map(vegan::procrustes, X = base_mds)
-
-
-```
-
-```{r}
-plot_mds_dunthorn(base_mds, mapping, aligned_samples = mds_samples_dm)
-plot_mds_dunthorn(base_mds, mapping, aligned_samples = mds_samples_dm_large)
-plot_mds_dunthorn(base_mds, mapping, aligned_samples = mds_samples_dm) + facet_wrap(~Origin)
-```
-
-```{r}
-groups <- data.frame(observation = rownames(base_mds$points)) %>% inner_join(mapping, by = c("observation" = "Sample")) %>% pull("Origin")
-connectivity_group(base_mds$points, mds_samples_dm %>% purrr::map(~ .x$Yrot))
-connectivity_all_groups(base_mds$points, mds_samples_dm %>% purrr::map(~ .x$Yrot), groups)
-```
-
-
-```{r}
 mds_samples_rarefy <- sample_posterior_rarefy(20, otu_tab) %>% 
   metaMDS_per_sample(try = 200, maxit = 500) %>% purrr::map(vegan::procrustes, X = base_mds)
 plot_mds_dunthorn(base_mds, mapping, aligned_samples = mds_samples_rarefy)
 ```
-
-```{r}
-connectivity_group(base_mds$points, mds_samples_rarefy %>% purrr::map(~ .x$Yrot))
-connectivity_all_groups(base_mds$points, mds_samples_rarefy %>% purrr::map(~ .x$Yrot), groups)
-```
-
-
-# Subsetting the data
-
-```{r, message=FALSE}
-set.seed(20190620)
-for(i in 1:5) {
-  samples_to_use <- mapping %>% group_by(Origin) %>% sample_n(3) %>% pull(Sample)
-  otu_tab_filtered <- otu_tab[samples_to_use,]
-  
-  base_mds_filtered <- otu_tab_filtered %>% metaMDS(trymax = 400, maxit = 500, parallel = 1, trace = 0)
-  mds_samples_dm_filtered <- sample_posterior_dm(20, otu_tab_filtered, prior = "ml",N_draws = "original") %>% 
-    metaMDS_per_sample(trymax = 400, maxit = 500) %>% purrr::map(vegan::procrustes, X = base_mds_filtered)
-  
-  pl <- plot_mds_dunthorn(base_mds_filtered, mapping, aligned_samples = mds_samples_dm_filtered, show_paths = "all") 
-  print(pl)
-  print(pl + facet_wrap(~Origin))
-  
-  groups <- data.frame(observation = rownames(base_mds_filtered$points)) %>% inner_join(mapping, by = c("observation" = "Sample")) %>% pull("Origin")
-  print(connectivity_all_groups(base_mds_filtered$points, mds_samples_dm_filtered %>% purrr::map(~ .x$Yrot), groups))
-
-}
-
-```
-
-
-```{r, message=FALSE, results="hide"}
-set.seed(201906202)
-for(i in 1:5) {
-  samples_to_use <- mapping %>% group_by(Origin) %>% sample_n(10) %>% pull(Sample)
-  otu_tab_filtered <- otu_tab[samples_to_use,]
-  
-  base_mds_filtered <- otu_tab_filtered %>% metaMDS(trymax = 400, maxit = 500, parallel = 1, trace = 0)
-  mds_samples_dm_filtered <- sample_posterior_dm(20, otu_tab_filtered, prior = "ml",N_draws = "original") %>% 
-    metaMDS_per_sample(trymax = 400, maxit = 500) %>% purrr::map(vegan::procrustes, X = base_mds_filtered)
-  
-  pl <- plot_mds_dunthorn(base_mds_filtered, mapping, aligned_samples = mds_samples_dm_filtered, show_paths = "all") 
-  print(pl)
-  print(pl + facet_wrap(~Origin))
-}
-
-```
-
-```{r, message=FALSE, results="hide"}
-set.seed(201906203)
-for(i in 1:5) {
-  samples_to_use <- mapping %>% group_by(Origin) %>% sample_n(15) %>% pull(Sample)
-  otu_tab_filtered <- otu_tab[samples_to_use,]
-  
-  base_mds_filtered <- otu_tab_filtered %>% metaMDS(trymax = 400, maxit = 500, parallel = 1, trace = 0)
-  mds_samples_dm_filtered <- sample_posterior_dm(20, otu_tab_filtered, prior = "ml",N_draws = "original") %>% 
-    metaMDS_per_sample(trymax = 400, maxit = 500) %>% purrr::map(vegan::procrustes, X = base_mds_filtered)
-  
-  pl <- plot_mds_dunthorn(base_mds_filtered, mapping, aligned_samples = mds_samples_dm_filtered, show_paths = "all") 
-  print(pl)
-  print(pl + facet_wrap(~Origin))
-}
-
-```
-
-Testing connectivity:
-
-```{r}
-samples_to_test <- mapping %>% filter(Origin == "Costa Rica") %>% sample_n(15) %>% pull(Sample)
-vegdist(otu_tab[samples_to_test,])
-```
-
-```{r}
-sample_1 <- "L030"
-resampled <- sample_posterior_dm(20, otu_tab[sample_1, , drop = FALSE], prior = "ml",N_draws = "original")
-vegdist(rbind(otu_tab[sample_1, , drop = FALSE], resampled[,1,]))
-
-```
-
