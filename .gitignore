@@ -23,4 +23,5 @@ private_data/
 packrat/lib*/
 packrat/src/
 
+local_data/
 local_temp_data/
