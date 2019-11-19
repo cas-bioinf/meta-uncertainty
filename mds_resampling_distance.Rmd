@@ -148,6 +148,11 @@ experiment_geel_jn %>% write.csv(file = paste0(output_dir,"/stats_geel_jn.csv"))
 ```
 
 ```{r}
+experiment_geel_jn <- read.csv(file = paste0(output_dir,"/stats_geel_jn.csv"))
+```
+
+
+```{r}
 experiment_geel_jn %>% my_plot(consistency_location, rmse_location)
 experiment_geel_jn %>% my_plot(consistency_location, rmse_angles)
 experiment_geel_jn %>% my_plot(consistency_location, rmse_distances)
