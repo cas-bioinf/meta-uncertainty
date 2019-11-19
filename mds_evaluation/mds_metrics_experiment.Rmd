@@ -1,0 +1,167 @@
+---
+title: "MDS Subsampling experiment"
+output: html_notebook
+---
+
+
+```{r setup}
+devtools::load_all()
+library(tidyverse)
+library(readxl)
+library(here)
+library(cowplot)
+library(vegan)
+output_dir <- here::here("local_temp_data")
+if(!dir.exists(output_dir)) {
+  dir.create(output_dir)
+}
+```
+
+
+```{r load data}
+datasets <- list()
+
+otus_raw <- read.csv(here("private_data","Dunthorn2017.txt"), stringsAsFactors = FALSE, sep = "\t")
+#otu_tab <- otus_raw %>% as.data.frame() %>% column_to_rownames("X__1") %>% as.matrix()
+otu_tab <- otus_raw %>% select(B005_B006:T199_T200) %>% as.matrix() %>% t()
+otu_tab <- otu_tab[rowSums(otu_tab) > 2000 & rownames(otu_tab) != "B005_B006",]
+
+mapping <- tibble(Sample = rownames(otu_tab)) %>% mutate(Origin = if_else(grepl("^B", Sample), "Panama", if_else(grepl("^L", Sample), "Costa Rica", "Ecuador")))
+
+```
+
+
+```{r}
+set.seed(20191107)
+
+experiment_dunthorn <- run_mds_experiment(otu_tab = otu_tab,
+                   n_samples_to_use = 15,
+                   n_steps = 100,
+                   mapping = mapping,
+                   group_column = Origin,
+                   accept_samples_func = function(mapping_filtered) {
+                      group_counts <- mapping_filtered %>% group_by(Origin) %>% summarise(count = n())
+                      nrow(group_counts) == 3 && all(group_counts$count > 2)
+                   })
+
+
+ experiment_dunthorn %>% write.csv(file = paste0(output_dir,"/stats_dunthorn.csv"))
+```
+
+```{r}
+experiment_dunthorn <- read_csv(file = paste0(output_dir,"/stats_dunthorn.csv"))
+```
+
+
+```{r}
+my_plot <- function(data, x,y, color = NULL) {
+  x <- enquo(x)
+  y <- enquo(y)
+  color <- enquo(color)
+  ggplot(data, aes(!!x, !!y, color = !!color)) + geom_jitter(width = 0, height = 0) + geom_smooth(method = "lm") + scale_color_distiller(palette = "Spectral")
+}
+
+# stats %>% my_plot(n_samples, rmse)
+# stats %>% my_plot(min_connectivity_average, rmse)
+# stats %>% my_plot(avg_connectivity_average, rmse)
+# stats %>% my_plot(min_connectivity_min, rmse)
+# stats %>% my_plot(avg_connectivity_min, rmse)
+
+
+```
+
+```{r}
+experiment_dunthorn %>% my_plot(consistency_location, rmse_location)
+experiment_dunthorn %>% my_plot(consistency_location, rmse_angles)
+experiment_dunthorn %>% my_plot(consistency_location, rmse_distances)
+experiment_dunthorn %>% my_plot(consistency_angles, rmse_location) 
+experiment_dunthorn %>% my_plot(consistency_angles, rmse_angles) 
+experiment_dunthorn %>% my_plot(consistency_angles, rmse_distances) 
+experiment_dunthorn %>% my_plot(consistency_pairwise_distances, rmse_location) 
+experiment_dunthorn %>% my_plot(consistency_pairwise_distances, rmse_angles) 
+experiment_dunthorn %>% my_plot(consistency_pairwise_distances, rmse_distances) 
+```
+
+
+```{r}
+otus_raw_geel <- read_excel(here("private_data","vanGeel2017.xlsx"), sheet = "Sample OTU matrix")
+otu_tab_geel <- otus_raw_geel %>% select(OTU_16:OTU_5257) %>% as.matrix()
+
+mapping_geel <- otus_raw_geel %>% select(species_id:plot) %>% mutate(Sample = paste0("S_",1:n()), type = if_else(species_id == "soil", "Soil", "Root"))
+
+rownames(otu_tab_geel) <- mapping_geel$Sample
+
+```
+
+
+```{r}
+set.seed(201911072)
+
+experiment_geel <- run_mds_experiment(otu_tab = otu_tab_geel,
+                   n_samples_to_use = 15,
+                   n_steps = 100,
+                   mapping = mapping_geel,
+                   group_column = grassland_type,
+                   accept_samples_func = function(mapping_filtered) {
+                      group_counts <- mapping_filtered %>% group_by(grassland_type) %>% summarise(count = n())
+                      nrow(group_counts) == 2 && all(group_counts$count > 2)
+                   }
+                   )
+
+experiment_geel %>% write.csv(file = paste0(output_dir,"/stats_geel.csv"))
+```
+
+```{r}
+experiment_geel <- read_csv(file = paste0(output_dir,"/stats_geel.csv"))
+
+```
+
+```{r}
+experiment_geel %>% my_plot(consistency_location, rmse_location)
+experiment_geel %>% my_plot(consistency_location, rmse_angles)
+experiment_geel %>% my_plot(consistency_location, rmse_distances)
+experiment_geel %>% my_plot(consistency_angles, rmse_location) 
+experiment_geel %>% my_plot(consistency_angles, rmse_angles) 
+experiment_geel %>% my_plot(consistency_angles, rmse_distances) 
+experiment_geel %>% my_plot(consistency_pairwise_distances, rmse_location) 
+experiment_geel %>% my_plot(consistency_pairwise_distances, rmse_angles) 
+experiment_geel %>% my_plot(consistency_pairwise_distances, rmse_distances) 
+
+```
+
+```{r}
+set.seed(201911072)
+
+experiment_geel_jn <- run_mds_experiment(otu_tab = otu_tab_geel,
+                   n_samples_to_use = 15,
+                   n_steps = 100,
+                   mapping = mapping_geel,
+                   group_column = grassland_type,
+                   accept_samples_func = function(mapping_filtered) {
+                      group_counts <- mapping_filtered %>% group_by(grassland_type) %>% summarise(count = n())
+                      nrow(group_counts) == 2 && all(group_counts$count > 2)
+                   },
+                   sampling_func = sample_posterior_jackknife_observations
+                   )
+
+experiment_geel_jn %>% write.csv(file = paste0(output_dir,"/stats_geel_jn.csv"))
+```
+
+```{r}
+experiment_geel_jn <- read.csv(file = paste0(output_dir,"/stats_geel_jn.csv"))
+```
+
+
+```{r}
+experiment_geel_jn %>% my_plot(consistency_location, rmse_location)
+experiment_geel_jn %>% my_plot(consistency_location, rmse_angles)
+experiment_geel_jn %>% my_plot(consistency_location, rmse_distances)
+experiment_geel_jn %>% my_plot(consistency_angles, rmse_location) 
+experiment_geel_jn %>% my_plot(consistency_angles, rmse_angles) 
+experiment_geel_jn %>% my_plot(consistency_angles, rmse_distances) 
+experiment_geel_jn %>% my_plot(consistency_pairwise_distances, rmse_location) 
+experiment_geel_jn %>% my_plot(consistency_pairwise_distances, rmse_angles) 
+experiment_geel_jn %>% my_plot(consistency_pairwise_distances, rmse_distances) 
+
+```
+

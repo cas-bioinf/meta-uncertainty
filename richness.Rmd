@@ -4,6 +4,7 @@ output: html_notebook
 ---
 
 Note - in the orig, SoilSample combines Rhisosphere and Roots - is that OK?
+
 ```{r setup}
 library(tidyverse)
 library(here)
