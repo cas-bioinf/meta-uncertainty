@@ -51,11 +51,19 @@ plot_mds_dunthorn(base_mds, mapping)
 ```
 
 ```{r}
-sens <- mds_sensitivity_check(20, otu_tab, mapping, group_column = Origin, trace = 0, trymax = 50)
+sens <- mds_sensitivity_check(20, otu_tab, mapping, group_column = Origin, trace = 0)
 plot(sens,color_aes = Origin, shape_aes = Origin, sample_point_alpha = 0.2)
 sens$connectivity_stats
 sens$consistency_stats
 ```
+
+
+```{r}
+sens_jackknife <- mds_sensitivity_check(20, otu_tab, mapping, group_column = Origin, trace = 0, trymax = 50, sampling_func = sample_posterior_jackknife_observations)
+plot(sens_jackknife,color_aes = Origin, shape_aes = Origin, sample_point_alpha = 0.2)
+
+```
+
 
 ```{r}
 aligned_samples_points <- sens$resampled_aligned_mds %>% purrr::map(~ .x$Yrot)
