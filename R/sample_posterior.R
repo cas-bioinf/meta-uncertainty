@@ -1,4 +1,4 @@
-#Everywhere: rows - observation, columns - genes
+#Everywhere: rows - observation, columns - OTUs
 
 default_prior = "ml"
 

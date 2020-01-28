@@ -39,7 +39,7 @@ mds_sensitivity_check <- function(N_samples, observed_matrix, mapping,
   if(!is.matrix(observed_matrix)) {
     stop("observed_matrix has to be a matrix")
   }
-  if(!is.data.frame(mapping) || !is.tibble(mapping)) {
+  if(!is.data.frame(mapping) && !is.tibble(mapping)) {
     stop("mapping has to be a data.frame or a tibble")
   }
 
