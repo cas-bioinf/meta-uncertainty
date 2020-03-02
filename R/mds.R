@@ -67,13 +67,19 @@ mds_sensitivity_check <- function(N_samples, observed_matrix, mapping,
                                            allow_unaligned = is_observation_subset(samples))
 
   aligned_samples_points <- resampled_aligned_mds %>% purrr::map(~ .x$Yrot)
-  connectivity_stats <- connectivity_stats_all_groups(base_mds$points,
+  res_connectivity_stats <- connectivity_stats_all_groups(base_mds$points,
                                                       aligned_samples_points,
                                                       group_values)
 
-  consistency_location <- consistency_location(base_mds$points, aligned_samples_points)
-  consistency_angles <- consistency_angles(base_mds$points, aligned_samples_points)
-  consistency_pairwise_distances <- consistency_pairwise_distances(base_mds$points, aligned_samples_points)
+  res_consistency_location <- consistency_location(base_mds$points, aligned_samples_points)
+  res_consistency_angles <- consistency_angles(base_mds$points, aligned_samples_points)
+  res_consistency_distances <- consistency_distances(base_mds$points, aligned_samples_points)
+
+  #Per-point stats
+
+  res_consistency_location_per_point <- consistency_location_per_point(base_mds$points, aligned_samples_points)
+  res_consistency_angles_per_point <- consistency_angles_per_point(base_mds$points, aligned_samples_points)
+  res_consistency_distances_per_point <- consistency_distances_per_point(base_mds$points, aligned_samples_points)
 
   structure(
     list(base_mds = base_mds,
@@ -82,10 +88,13 @@ mds_sensitivity_check <- function(N_samples, observed_matrix, mapping,
          mapping = mapping,
          group_column = group_column,
          group_values = group_values,
-         connectivity_stats = connectivity_stats,
-         consistency_stats = data.frame(consistency_location = consistency_location,
-                                        consistency_angles = consistency_angles,
-                                        consistency_pairwise_distances = consistency_pairwise_distances)
+         connectivity_stats = res_connectivity_stats,
+         consistency_stats = data.frame(consistency_location = res_consistency_location,
+                                        consistency_angles = res_consistency_angles,
+                                        consistency_distances = res_consistency_distances),
+         per_point_consistency = data.frame(location = res_consistency_location_per_point,
+                                      angles = res_consistency_angles_per_point,
+                                      distances = res_consistency_distances_per_point)
          ),
     class = "mds_sensitivity"
   )

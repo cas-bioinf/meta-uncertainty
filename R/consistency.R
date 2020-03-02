@@ -11,7 +11,6 @@ consistency_location_per_point <- function(base_points, aligned_samples_points) 
   sum_squared_distances <- array(0, n_points)
   n_squared_distances <- array(0, n_points)
   names(sum_squared_distances) <- rownames(base_points)
-
   for(i in 1:n_samples) {
     check_point_matrix(aligned_samples_points[[i]])
     if(n_points == nrow(aligned_samples_points[[i]])) {
@@ -20,17 +19,23 @@ consistency_location_per_point <- function(base_points, aligned_samples_points) 
         stop("Row names are inconsistent between base_points and aligned_samples_points")
       }
       points_present <- 1:n_points
+      points_present_base_id <- 1:n_points
     } else {
       points_present = rownames(aligned_samples_points[[i]])
       if(!identical(intersect(points_present, rownames(base_points)), points_present)) {
         stop("Some points in aligned_samples_points not found in base_points")
       }
+      points_present_base_id <- integer(length(points_present))
+      for(p in 1:length(points_present)) {
+        points_present_base_id[p] <- which(rownames(base_points) == points_present[p])
+      }
+
     }
-    squared_distances <- rowSums((base_points[points_present,] - aligned_samples_points[[i]]) ^ 2)
-    sum_squared_distances[points_present] <- sum_squared_distances[points_present] + squared_distances
-    n_squared_distances[points_present] <- n_squared_distances[points_present] + 1
+    squared_distances <- rowSums((base_points[points_present_base_id,] - aligned_samples_points[[i]]) ^ 2)
+    sum_squared_distances[points_present_base_id] <- sum_squared_distances[points_present_base_id] + squared_distances
+    n_squared_distances[points_present_base_id] <- n_squared_distances[points_present_base_id] + 1
   }
-  pmin(1, 1 - sqrt(sum_squared_distances / (n_squared_distances * mean_distance_squared)))
+  pmax(0, 1 - sqrt(sum_squared_distances / (n_squared_distances * mean_distance_squared)))
 }
 
 #' @export
@@ -126,13 +131,12 @@ consistency_angles_per_point <- function(base_points, aligned_samples_points) {
     for(p in 1:n_sample_points) {
       sample_point_angles <- sample_angles[ ((p - 1) * n_angles_per_point + 1) : (p * n_angles_per_point)]
       base_point_angles <- base_angles[ ((points_present_base_id[p] - 1) * n_angles_per_point + 1) : (points_present_base_id[p] * n_angles_per_point)]
-      # print(sample_point_angles)
-      # print(base_point_angles)
+      # Note that since the angles are computed in [0, pi] I don't need to worry about 2pi ~ 0
       sum_squared_distances[points_present_base_id[p]] <- sum_squared_distances[points_present_base_id[p]] + sum((sample_point_angles - base_point_angles) ^ 2)
       n_squared_distances[points_present_base_id[p]] <- n_squared_distances[points_present_base_id[p]] + n_angles_per_point
     }
   }
-  1 - sqrt(sum_squared_distances / (n_squared_distances * pi^2))
+  pmax(0, 1 - sqrt(sum_squared_distances / (n_squared_distances * pi^2)))
 }
 
 #' @export
@@ -142,7 +146,7 @@ consistency_angles <- function(base_points, aligned_samples_points) {
 
 
 #' @export
-consistency_pairwise_distances_per_point <- function(base_points, aligned_samples_points) {
+consistency_distances_per_point <- function(base_points, aligned_samples_points) {
   check_point_matrix(base_points)
   n_points <- nrow(base_points)
 
@@ -186,10 +190,10 @@ consistency_pairwise_distances_per_point <- function(base_points, aligned_sample
     n_squared_differences[points_present_base_id] <-
       n_squared_differences[points_present_base_id] + n_points - 1
   }
-  pmin(1, 1 - sqrt(sum_squared_differences / (n_squared_differences)) / mean_base_distance)
+  pmax(0, 1 - sqrt(sum_squared_differences / (n_squared_differences)) / mean_base_distance)
 }
 
-consistency_pairwise_distances <- function(base_points, aligned_samples_points) {
-  sqrt(mean(consistency_pairwise_distances_per_point(base_points, aligned_samples_points) ^ 2))
+consistency_distances <- function(base_points, aligned_samples_points) {
+  sqrt(mean(consistency_distances_per_point(base_points, aligned_samples_points) ^ 2))
 }
 
