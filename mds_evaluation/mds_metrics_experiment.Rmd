@@ -37,7 +37,7 @@ set.seed(20191107)
 experiment_dunthorn <- run_mds_experiment(otu_tab = otu_tab,
                    n_samples_to_use_min = 15,
                    n_samples_to_use_max = 60,
-                   n_steps = 100,
+                   n_steps = 50,
                    mapping = mapping,
                    group_column = Origin,
                    accept_samples_func = function(mapping_filtered) {
@@ -85,6 +85,22 @@ experiment_dunthorn$global %>% my_plot(consistency_angles, rmse_angles, n_sample
 
 
 ```{r}
+experiment_dunthorn$global %>% filter(consistency_distances < 0.6)
+plot(experiment_dunthorn$sens_checks[[32]], color_aes = Origin, shape_aes = Origin)
+
+```
+
+```{r}
+max(dist(experiment_dunthorn$sens_checks[[32]]$base_mds$points, method = "euclidean"))
+max(dist(experiment_dunthorn$sens_checks[[10]]$base_mds$points, method = "euclidean"))
+max(dist(experiment_dunthorn$sens_checks[[33]]$base_mds$points, method = "euclidean"))
+experiment_dunthorn$sens_checks[[10]]$base_mds$points ^ 2 %>% rowSums() %>% mean() %>% sqrt()
+experiment_dunthorn$sens_checks[[32]]$base_mds$points ^ 2 %>% rowSums() %>% mean() %>% sqrt()
+
+```
+
+
+```{r}
 otus_raw_geel <- read_excel(here("private_data","vanGeel2017.xlsx"), sheet = "Sample OTU matrix")
 otu_tab_geel <- otus_raw_geel %>% select(OTU_16:OTU_5257) %>% as.matrix()
 
@@ -98,25 +114,30 @@ rownames(otu_tab_geel) <- mapping_geel$Sample
 ```{r}
 set.seed(201911072)
 
-experiment_geel <- run_mds_experiment(otu_tab = otu_tab_geel,
-                   n_samples_to_use_min = 10,
-                   n_samples_to_use_max = 60,
-                   n_steps = 100,
-                   mapping = mapping_geel,
-                   group_column = grassland_type,
-                   accept_samples_func = function(mapping_filtered) {
-                      group_counts <- mapping_filtered %>% group_by(grassland_type) %>% summarise(count = n())
-                      nrow(group_counts) == 2 && all(group_counts$count > 2)
-                   }
-                   )
+geel_run_file <- paste0(output_dir,"/run_geel_varying.rds")
+if(!file.exists(geel_run_file)) {
+  experiment_geel_run <- run_mds_experiment(
+    otu_tab = otu_tab_geel,
+    bootstrap_func = bootstrap_func_dm(20),
+    n_observations_to_use_min = 10,
+    n_observations_to_use_max = 60,
+    n_steps = 100,
+    mapping = mapping_geel,
+    accept_subset_func = function(mapping_filtered) {
+       group_counts <- mapping_filtered %>% group_by(grassland_type) %>% summarise(count = n())
+       nrow(group_counts) == 2 && all(group_counts$count > 2)
+    }
+  )
+  
+  saveRDS(experiment_geel_run, file = geel_run_file)
+} else {
+  experiment_geel_run <- readRDS(file = geel_run_file)
+}
 
-saveRDS(experiment_geel, file = paste0(output_dir,"/stats_geel_varying.rds"))
-#experiment_geel %>% write.csv(file = paste0(output_dir,"/stats_geel.csv"))
 ```
 
 ```{r}
-experiment_geel <- readRDS(file = paste0(output_dir,"/stats_geel_varying.rds"))
-
+experiment_geel <- eval_mds_experiment(
 ```
 
 
@@ -159,6 +180,7 @@ experiment_geel_jn <- readRDS(file = paste0(output_dir,"/stats_geel_jn_varying.r
 ```{r}
 experiment_geel_jn$per_point %>% my_plot(location, squared_error_location, n_samples)
 experiment_geel_jn$per_point %>% my_plot(distances, rmse_distances, n_samples)
+
 ```
 
 

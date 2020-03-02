@@ -1,32 +1,67 @@
-#' @export
-run_mds_experiment <- function(otu_tab, n_samples_to_use_min, n_samples_to_use_max, n_steps, mapping, group_column,
-                               accept_samples_func, n_sensitivity_samples = 20,
+run_mds_experiment <- function(otu_tab, bootstrap_func, n_observations_to_use_min, n_observations_to_use_max,
+                               n_steps, mapping,
+                               accept_subset_func,
                                trymax = 20, maxit = 50,
                                ...) {
-  stats_list <- list()
-  per_point_stats_list <- list()
 
+  step_results <- list()
   full_mds <- otu_tab %>% metaMDS(trymax = trymax, maxit = maxit, trace = 0)
 
 
   for(n in 1:n_steps) {
-    n_samples_to_use <- rdunif(1, n_samples_to_use_min, n_samples_to_use_max)
+    n_observations_to_use <- rdunif(1, n_observations_to_use_min, n_observations_to_use_max)
     repeat {
-      samples_to_use <- sample(rownames(otu_tab), size = n_samples_to_use)
-      otu_tab_filtered <- otu_tab[samples_to_use,]
-      mapping_filtered <- mapping %>% filter(Sample %in% samples_to_use)
+      observations_to_use <- sample(rownames(otu_tab), size = n_observations_to_use)
+      otu_tab_filtered <- otu_tab[observations_to_use,]
+      mapping_filtered <- mapping %>% filter(Sample %in% observations_to_use)
 
-      if(accept_samples_func(mapping_filtered)){
+      if(accept_subset_func(mapping_filtered)){
         break;
       }
     }
 
-    sens_check <- mds_sensitivity_check(n_sensitivity_samples, otu_tab_filtered, mapping_filtered,
-                                        group_column = {{ group_column }}, trace = 0,
-                                        trymax = trymax, maxit = maxit,
-                                        ...)
+    compute_result <- mds_sensitivity_check_compute(
+                        observed_matrix = otu_tab_filtered, bootstrap_func = bootstrap_func,
+                        trace = 0, trymax = trymax, maxit = maxit, ...)
 
-    full_mds_subset <- full_mds$points[samples_to_use,]
+
+    step_results[[n]] <- list(compute_result = compute_result,
+                              observations_to_use = observations_to_use,
+                              otu_tab_filtered = otu_tab_filtered,
+                              mapping_filtered = mapping_filtered)
+
+    if(n %% 10 == 0) {
+      cat("Step", n, " completed\n")
+    }
+
+  }
+
+  list(full_mds = full_mds, step_results = step_results)
+}
+
+
+#' @export
+eval_mds_experiment <- function(run_result, group_column) {
+  stats_list <- list()
+  per_point_stats_list <- list()
+  sens_check_list <- list()
+
+  full_mds <- run_result$full_mds
+
+  step_results <- run_result$step_results
+  n_steps <- length(step_results)
+
+  for(n in 1:n_steps) {
+    sens_check <- mds_sensitivity_check_eval(step_results[[n]]$compute_result,
+                                             step_results[[n]]$mapping_filtered,
+                                            group_column = {{ group_column }})
+
+    sens_check_list[[n]] <- sens_check
+
+    observations_to_use <- step_results[[n]]$observations_to_use
+    n_observations_to_use <- length(observations_to_use)
+
+    full_mds_subset <- full_mds$points[observations_to_use,]
     procrustes_to_full <- vegan::procrustes(full_mds_subset, sens_check$base_mds)
 
     rmse_angles <- sqrt( mean(
@@ -46,15 +81,15 @@ run_mds_experiment <- function(otu_tab, n_samples_to_use_min, n_samples_to_use_m
                 avg_connectivity_min = mean(connectivity_min),
                 avg_connectivity_average = mean(connectivity_average)) %>%
       mutate( step = n,
-              n_samples = n_samples_to_use,
-              rmse_location = sqrt(procrustes_to_full$ss / n_samples_to_use),
+              n_observations = n_observations_to_use,
+              rmse_location = sqrt(procrustes_to_full$ss / n_observations_to_use),
               rmse_angles = rmse_angles,
               rmse_distances = rmse_distances
               ) %>%
       crossing(sens_check$consistency_stats)
 
-    per_point_stats_list[[n]] <- cbind(sens_check$per_point_consistency, n_samples = n_samples_to_use,
-                                       data.frame(step = n, sample = samples_to_use,
+    per_point_stats_list[[n]] <- cbind(sens_check$per_point_consistency, n_observations = n_observations_to_use,
+                                       data.frame(step = n, observation = observations_to_use,
                                                   squared_error_location = squared_error_location_per_point,
                                                   rmse_distances = rmse_distances_per_point))
 
@@ -65,5 +100,6 @@ run_mds_experiment <- function(otu_tab, n_samples_to_use_min, n_samples_to_use_m
   }
 
   list(global = stats_list %>% do.call(rbind, .),
-       per_point = per_point_stats_list %>% do.call(rbind, .))
+       per_point = per_point_stats_list %>% do.call(rbind, .),
+       sens_checks = sens_check_list)
 }

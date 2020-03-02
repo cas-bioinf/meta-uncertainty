@@ -2,7 +2,8 @@
 
 - Synthetic data - continous mixture of two different populations
 
-- Language - avoid "sample" whenever possible - "draw" (from bootstrap), "observation" (a row in the data)
+- Language - avoid "sample" whenever possible - "bootstrap" - the process, "draw" (from bootstrap), "observation" (a row in the data),
+  "read" for a single element of an observation/draw, "
 
 - Parallel coordinates plots to show more dimensions
 

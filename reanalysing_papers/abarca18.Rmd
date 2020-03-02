@@ -74,7 +74,7 @@ plot_mds_abarca(base_mds, mapping, aligned_samples = mds_samples_rarefy)
 ```
 
 ```{r, message=FALSE, results="hide"}
-mds_samples_dm <- sample_posterior_dm(20, otu_tab, prior = "ml",N_draws = "original") %>% apply_per_sample(nmds_func) %>% purrr::map(vegan::procrustes, X = base_mds)
+mds_samples_dm <- sample_posterior_dm(20, otu_tab, prior = "ml",N_reads = "original") %>% apply_per_sample(nmds_func) %>% purrr::map(vegan::procrustes, X = base_mds)
 
 plot_mds_abarca(base_mds, mapping, aligned_samples = mds_samples_dm)
 ```

@@ -55,7 +55,7 @@ plot_mds_rama(base_mds, mapping)
 Turns out it is only presence/absenca data, so not really meaningful to use my methods...
 
 ```{r, message=FALSE, results="hide"}
-mds_samples_dm <- sample_posterior_dm(20, otu_tab, prior = "ml",N_draws = "original") %>% 
+mds_samples_dm <- sample_posterior_dm(20, otu_tab, prior = "ml",N_reads = "original") %>% 
   metaMDS_per_sample(try = 100, maxit = 500, model = "global") %>% purrr::map(vegan::procrustes, X = base_mds)
 
 

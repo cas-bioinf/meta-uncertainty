@@ -1,9 +1,9 @@
 #' @export
-consistency_location_per_point <- function(base_points, aligned_samples_points) {
+consistency_location_per_point <- function(base_points, aligned_bootstrap_points) {
 #distance / max distance within original mds
   check_point_matrix(base_points)
   n_points <- nrow(base_points)
-  n_samples <- length(aligned_samples_points)
+  n_draws <- length(aligned_bootstrap_points)
 
   #max_distance_squared <-  max(dist(base_points, method = "euclidean"))^2
   mean_distance_squared <-  mean(dist(base_points, method = "euclidean"))^2
@@ -11,19 +11,19 @@ consistency_location_per_point <- function(base_points, aligned_samples_points) 
   sum_squared_distances <- array(0, n_points)
   n_squared_distances <- array(0, n_points)
   names(sum_squared_distances) <- rownames(base_points)
-  for(i in 1:n_samples) {
-    check_point_matrix(aligned_samples_points[[i]])
-    if(n_points == nrow(aligned_samples_points[[i]])) {
-      if(!is.null(rownames(base_points)) && !is.null(rownames(aligned_samples_points[[i]])) &&
-         !all(rownames(base_points) == rownames(aligned_samples_points[[i]]))) {
-        stop("Row names are inconsistent between base_points and aligned_samples_points")
+  for(i in 1:n_draws) {
+    check_point_matrix(aligned_bootstrap_points[[i]])
+    if(n_points == nrow(aligned_bootstrap_points[[i]])) {
+      if(!is.null(rownames(base_points)) && !is.null(rownames(aligned_bootstrap_points[[i]])) &&
+         !all(rownames(base_points) == rownames(aligned_bootstrap_points[[i]]))) {
+        stop("Row names are inconsistent between base_points and aligned_bootstrap_points")
       }
       points_present <- 1:n_points
       points_present_base_id <- 1:n_points
     } else {
-      points_present = rownames(aligned_samples_points[[i]])
+      points_present = rownames(aligned_bootstrap_points[[i]])
       if(!identical(intersect(points_present, rownames(base_points)), points_present)) {
-        stop("Some points in aligned_samples_points not found in base_points")
+        stop("Some points in aligned_bootstrap_points not found in base_points")
       }
       points_present_base_id <- integer(length(points_present))
       for(p in 1:length(points_present)) {
@@ -31,7 +31,7 @@ consistency_location_per_point <- function(base_points, aligned_samples_points) 
       }
 
     }
-    squared_distances <- rowSums((base_points[points_present_base_id,] - aligned_samples_points[[i]]) ^ 2)
+    squared_distances <- rowSums((base_points[points_present_base_id,] - aligned_bootstrap_points[[i]]) ^ 2)
     sum_squared_distances[points_present_base_id] <- sum_squared_distances[points_present_base_id] + squared_distances
     n_squared_distances[points_present_base_id] <- n_squared_distances[points_present_base_id] + 1
   }
@@ -39,8 +39,8 @@ consistency_location_per_point <- function(base_points, aligned_samples_points) 
 }
 
 #' @export
-consistency_location <- function(base_points, aligned_samples_points) {
-  sqrt(mean(consistency_location_per_point(base_points, aligned_samples_points)) ^ 2)
+consistency_location <- function(base_points, aligned_bootstrap_points) {
+  sqrt(mean(consistency_location_per_point(base_points, aligned_bootstrap_points)) ^ 2)
 }
 
 # All angles between threes of points, in radians
@@ -93,11 +93,11 @@ compute_angles <- function(points) {
 }
 
 #' @export
-consistency_angles_per_point <- function(base_points, aligned_samples_points) {
+consistency_angles_per_point <- function(base_points, aligned_bootstrap_points) {
   check_point_matrix(base_points)
   n_points <- nrow(base_points)
 
-  n_samples <- length(aligned_samples_points)
+  n_draws <- length(aligned_bootstrap_points)
 
   base_angles <- compute_angles(base_points)
 
@@ -105,34 +105,34 @@ consistency_angles_per_point <- function(base_points, aligned_samples_points) {
   n_squared_distances <- array(0, n_points)
   names(sum_squared_distances) <- rownames(base_points)
 
-  for(i in 1:n_samples) {
-    check_point_matrix(aligned_samples_points[[i]])
-    if(n_points == nrow(aligned_samples_points[[i]])) {
-      if(!is.null(rownames(base_points)) && !is.null(rownames(aligned_samples_points[[i]])) &&
-         !all(rownames(base_points) == rownames(aligned_samples_points[[i]]))) {
-        stop("Row names are inconsistent between base_points and aligned_samples_points")
+  for(i in 1:n_draws) {
+    check_point_matrix(aligned_bootstrap_points[[i]])
+    if(n_points == nrow(aligned_bootstrap_points[[i]])) {
+      if(!is.null(rownames(base_points)) && !is.null(rownames(aligned_bootstrap_points[[i]])) &&
+         !all(rownames(base_points) == rownames(aligned_bootstrap_points[[i]]))) {
+        stop("Row names are inconsistent between base_points and aligned_bootstrap_points")
       }
       points_present <- 1:n_points
       points_present_base_id <- 1:n_points
     } else {
-      points_present = rownames(aligned_samples_points[[i]])
+      points_present = rownames(aligned_bootstrap_points[[i]])
       if(!identical(intersect(points_present, rownames(base_points)), points_present)) {
-        stop("Some points in aligned_samples_points not found in base_points")
+        stop("Some points in aligned_bootstrap_points not found in base_points")
       }
       points_present_base_id <- integer(length(points_present))
       for(p in 1:length(points_present)) {
         points_present_base_id[p] <- which(rownames(base_points) == points_present[p])
       }
     }
-    sample_angles <- compute_angles(aligned_samples_points[[i]])
-    n_sample_points <- length(points_present)
-    n_angles_per_point <- (n_sample_points - 1) * (n_sample_points - 2) / 2
+    draw_angles <- compute_angles(aligned_bootstrap_points[[i]])
+    n_draw_points <- length(points_present)
+    n_angles_per_point <- (n_draw_points - 1) * (n_draw_points - 2) / 2
 
-    for(p in 1:n_sample_points) {
-      sample_point_angles <- sample_angles[ ((p - 1) * n_angles_per_point + 1) : (p * n_angles_per_point)]
+    for(p in 1:n_draw_points) {
+      draw_point_angles <- draw_angles[ ((p - 1) * n_angles_per_point + 1) : (p * n_angles_per_point)]
       base_point_angles <- base_angles[ ((points_present_base_id[p] - 1) * n_angles_per_point + 1) : (points_present_base_id[p] * n_angles_per_point)]
       # Note that since the angles are computed in [0, pi] I don't need to worry about 2pi ~ 0
-      sum_squared_distances[points_present_base_id[p]] <- sum_squared_distances[points_present_base_id[p]] + sum((sample_point_angles - base_point_angles) ^ 2)
+      sum_squared_distances[points_present_base_id[p]] <- sum_squared_distances[points_present_base_id[p]] + sum((draw_point_angles - base_point_angles) ^ 2)
       n_squared_distances[points_present_base_id[p]] <- n_squared_distances[points_present_base_id[p]] + n_angles_per_point
     }
   }
@@ -140,17 +140,17 @@ consistency_angles_per_point <- function(base_points, aligned_samples_points) {
 }
 
 #' @export
-consistency_angles <- function(base_points, aligned_samples_points) {
-  sqrt(mean(consistency_angles_per_point(base_points, aligned_samples_points)) ^ 2)
+consistency_angles <- function(base_points, aligned_bootstrap_points) {
+  sqrt(mean(consistency_angles_per_point(base_points, aligned_bootstrap_points)) ^ 2)
 }
 
 
 #' @export
-consistency_distances_per_point <- function(base_points, aligned_samples_points) {
+consistency_distances_per_point <- function(base_points, aligned_bootstrap_points) {
   check_point_matrix(base_points)
   n_points <- nrow(base_points)
 
-  n_samples <- length(aligned_samples_points)
+  n_draws <- length(aligned_bootstrap_points)
 
   base_dist <- dist(base_points, method = "euclidean")
   mean_base_distance <- mean(base_dist)
@@ -160,30 +160,30 @@ consistency_distances_per_point <- function(base_points, aligned_samples_points)
   n_squared_differences <- array(0, n_points)
   names(sum_squared_differences) <- rownames(base_points)
 
-  for(i in 1:n_samples) {
-    check_point_matrix(aligned_samples_points[[i]])
-    if(n_points == nrow(aligned_samples_points[[i]])) {
-      if(!is.null(rownames(base_points)) && !is.null(rownames(aligned_samples_points[[i]])) &&
-         !all(rownames(base_points) == rownames(aligned_samples_points[[i]]))) {
-        stop("Row names are inconsistent between base_points and aligned_samples_points")
+  for(i in 1:n_draws) {
+    check_point_matrix(aligned_bootstrap_points[[i]])
+    if(n_points == nrow(aligned_bootstrap_points[[i]])) {
+      if(!is.null(rownames(base_points)) && !is.null(rownames(aligned_bootstrap_points[[i]])) &&
+         !all(rownames(base_points) == rownames(aligned_bootstrap_points[[i]]))) {
+        stop("Row names are inconsistent between base_points and aligned_bootstrap_points")
       }
       points_present <- 1:n_points
       points_present_base_id <- 1:n_points
     } else {
-      points_present = rownames(aligned_samples_points[[i]])
+      points_present = rownames(aligned_bootstrap_points[[i]])
       if(!identical(intersect(points_present, rownames(base_points)), points_present)) {
-        stop("Some points in aligned_samples_points not found in base_points")
+        stop("Some points in aligned_bootstrap_points not found in base_points")
       }
       points_present_base_id <- integer(length(points_present))
       for(p in 1:length(points_present)) {
         points_present_base_id[p] <- which(rownames(base_points) == points_present[p])
       }
     }
-    sample_distances <- as.matrix(dist(aligned_samples_points[[i]], method = "euclidean"))
-    n_sample_points <- length(points_present)
-    n_angles_per_point <- (n_sample_points - 1) * (n_sample_points - 2) / 2
+    draw_distances <- as.matrix(dist(aligned_bootstrap_points[[i]], method = "euclidean"))
+    n_draw_points <- length(points_present)
+    n_angles_per_point <- (n_draw_points - 1) * (n_draw_points - 2) / 2
 
-    diff_matrix <- sample_distances - base_distances[points_present_base_id, points_present_base_id]
+    diff_matrix <- draw_distances - base_distances[points_present_base_id, points_present_base_id]
     sum_squared_differences[points_present_base_id] <-
       sum_squared_differences[points_present_base_id] + rowSums(diff_matrix ^ 2)
 
@@ -193,7 +193,7 @@ consistency_distances_per_point <- function(base_points, aligned_samples_points)
   pmax(0, 1 - sqrt(sum_squared_differences / (n_squared_differences)) / mean_base_distance)
 }
 
-consistency_distances <- function(base_points, aligned_samples_points) {
-  sqrt(mean(consistency_distances_per_point(base_points, aligned_samples_points) ^ 2))
+consistency_distances <- function(base_points, aligned_bootstrap_points) {
+  sqrt(mean(consistency_distances_per_point(base_points, aligned_bootstrap_points) ^ 2))
 }
 

@@ -35,33 +35,33 @@ test_that("Widest path", {
 })
 
 test_that("connectivity for single group", {
-  # Each point has one sample close and two samples far
+  # Each point has one draw close and two draws far
   #                         point1        point2       point3
   base_points <-  matrix( c(0,     1,     0,     0,    1,     0    ), nrow = 3, ncol = 2, byrow = TRUE)
-  samples <- list(
+  draws <- list(
                   matrix( c(0.1,   1.2,  -1.8,   0.3,  0.5,   0.9  ), nrow = 3, ncol = 2, byrow = TRUE),
                   matrix( c(0.9,   1.1,   0.2,   0.18, 1.4,   -1.1 ), nrow = 3, ncol = 2, byrow = TRUE),
                   matrix( c(-2.9,  0.17,  0.9,   1.04, 1.25,  -0.1 ), nrow = 3, ncol = 2, byrow = TRUE)
   )
   rownames(base_points) <- as.character(1:3)
 
-  samples_further_asymmetric <- matrix(c(3, 1, 1,    2, 3, 2,   0, 2, 3), nrow = 3, ncol = 3, byrow = TRUE)
-  expect_equivalent( connectivity_matrix_direct_assymmetric(base_points, samples), samples_further_asymmetric / length(samples))
+  draws_further_asymmetric <- matrix(c(3, 1, 1,    2, 3, 2,   0, 2, 3), nrow = 3, ncol = 3, byrow = TRUE)
+  expect_equivalent( connectivity_matrix_direct_assymmetric(base_points, draws), draws_further_asymmetric / length(draws))
 
-  samples_further <- matrix(c(3, 2, 1,    2, 3, 2,   1, 2, 3), nrow = 3, ncol = 3, byrow = TRUE)
-  expect_equivalent( connectivity_matrix_direct(base_points, samples), samples_further / length(samples))
+  draws_further <- matrix(c(3, 2, 1,    2, 3, 2,   1, 2, 3), nrow = 3, ncol = 3, byrow = TRUE)
+  expect_equivalent( connectivity_matrix_direct(base_points, draws), draws_further / length(draws))
 
-  stats_group <- connectivity_stats_group(base_points, samples)
+  stats_group <- connectivity_stats_group(base_points, draws)
   expect_equal( stats_group$connectivity_min, 2/3)
 })
 
 
-test_that("Connectivity works with jackknife samples", {
+test_that("Connectivity works with jackknife draws", {
   set.seed(20191011)
   base_points <-  matrix( rnorm(500), nrow = 50, ncol = 10)
   rownames(base_points) <- as.character(1:50)
-  samples <- sample_posterior_jackknife_observations(base_points)
-  res <- connectivity_stats_all_groups(base_points, samples, c(1:3, sample(1:3, size = 7, replace = TRUE)))
+  draws <- bootstrap_reads_jackknife_observations(base_points)
+  res <- connectivity_stats_all_groups(base_points, draws, c(1:3, sample(1:3, size = 7, replace = TRUE)))
   expect_true(nrow(res) == 3)
   expect_true(all(!is.na(res$group)))
   expect_true(all(!is.na(res$connectivity_average)))

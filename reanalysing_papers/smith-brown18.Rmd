@@ -52,7 +52,7 @@ plot_mds_brown_smith(base_mds, mapping)
 
 
 ```{r, message=FALSE, results="hide"}
-mds_samples_dm <- sample_posterior_dm(20, otu_tab, prior = "ml",N_draws = "original") %>% 
+mds_samples_dm <- sample_posterior_dm(20, otu_tab, prior = "ml",N_reads = "original") %>% 
   metaMDS_per_sample(trymax = 400, maxit = 500) %>% purrr::map(vegan::procrustes, X = base_mds)
 
 

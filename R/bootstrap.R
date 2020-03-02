@@ -1,6 +1,6 @@
 #Everywhere: rows - observation, columns - OTUs
 
-default_prior = "ml"
+default_dm_prior = "ml"
 
 dm_model <- NULL
 
@@ -11,9 +11,9 @@ get_dm_model <- function() {
   dm_model
 }
 
-rdirichlet_multinomial <- function(N, N_draws, alpha) {
-  dirichlet_samples <- MCMCpack::rdirichlet(N, alpha)
-  apply(dirichlet_samples, MARGIN = 1, FUN = function(x) { rmultinom(1, N_draws, x)[,1] })
+rdirichlet_multinomial <- function(N, N_reads, alpha) {
+  dirichlet_draws <- MCMCpack::rdirichlet(N, alpha)
+  apply(dirichlet_draws, MARGIN = 1, FUN = function(x) { rmultinom(1, N_reads, x)[,1] })
 }
 
 dirichlet_multinomial_lpmf <- function(y, alpha) {
@@ -93,55 +93,55 @@ prepare_prior <- function(N, observed, prior) {
   prior
 }
 
-get_dirichlet_draws <- function(N, observed, prior = default_prior) {
+get_dirichlet_proportions <- function(N, observed, prior = default_dm_prior) {
   prior_prep <- prepare_prior(N, observed, prior)
-  draws <- matrix(NA_real_, ncol = length(observed), nrow = N)
+  proportions <- matrix(NA_real_, ncol = length(observed), nrow = N)
   for(i in 1:N) {
-    draws[i,] <- MCMCpack::rdirichlet(1, observed + prior_prep[i])
+    proportions[i,] <- MCMCpack::rdirichlet(1, observed + prior_prep[i])
   }
-  # draws <- MCMCpack::rdirichlet(N, observed + prior_prep[1])
-  draws
+  # reads <- MCMCpack::rdirichlet(N, observed + prior_prep[1])
+  proportions
+}
+
+# Returns a matrix with N draws (rows) and length(observed) columns
+bootstrap_proportions_dm_single <- function(N, observed, prior = default_dm_prior) {
+  t(get_dirichlet_proportions(N, observed, prior))
 }
 
 # Returns a matrix with N samples (rows) and length(observed) columns
-sample_latent_dm_single <- function(N, observed, prior = default_prior) {
-  t(get_dirichlet_draws(N, observed, prior))
-}
-
-# Returns a matrix with N samples (rows) and length(observed) columns
-sample_posterior_dm_single <- function(N, observed, N_draws = sum(observed), prior = default_prior) {
-  if(N_draws == "original") {
-    N_draws = sum(observed)
-  } else if(!is.numeric(N_draws) || length(N_draws) != 1) {
-    stop("N_draws must be single number or 'original'")
+bootstrap_reads_dm_single <- function(N, observed, N_reads = sum(observed), prior = default_dm_prior) {
+  if(N_reads == "original") {
+    N_reads = sum(observed)
+  } else if(!is.numeric(N_reads) || length(N_reads) != 1) {
+    stop("N_reads must be single number or 'original'")
   }
 
-  dirichlet_draws <- get_dirichlet_draws(N, observed, prior)
-  t(apply(dirichlet_draws, MARGIN = 1, FUN = function(x) { rmultinom(1, N_draws, x)[,1] }))
+  dirichlet_proportions <- get_dirichlet_proportions(N, observed, prior)
+  t(apply(dirichlet_proportions, MARGIN = 1, FUN = function(x) { rmultinom(1, N_reads, x)[,1] }))
 }
 
 
 # Returns 3D array with dimensions N, nrow(observed_matrix), ncol(observed_matrix)
-sample_posterior_dm <- function(N, observed_matrix, N_draws = "original",
-                                    prior = default_prior) {
+bootstrap_reads_dm <- function(N, observed_matrix, N_reads = "original",
+                                    prior = default_dm_prior) {
   #TODO check observed_matrix is just integers
-  values_raw <- apply(observed_matrix, MARGIN = 1, FUN = function(x) { sample_posterior_dm_single(N, x, N_draws, prior) })
+  values_raw <- apply(observed_matrix, MARGIN = 1, FUN = function(x) { bootstrap_reads_dm_single(N, x, N_reads, prior) })
   wrong_dim_order <- array(values_raw, c(N, ncol(observed_matrix) , nrow(observed_matrix)),
         dimnames = list(paste0("S",1:N), colnames(observed_matrix), rownames(observed_matrix)))
   aperm(wrong_dim_order, c(1,3,2))
 }
 
 # Returns 3D array with dimensions N, nrow(observed_matrix), ncol(observed_matrix)
-sample_latent_dm <- function(N, observed_matrix,
-                                    prior = default_prior) {
-  values_raw <- apply(observed_matrix, MARGIN = 1, FUN = function(x) { sample_latent_dm_single(N, x, prior) })
+bootstrap_proportions_dm <- function(N, observed_matrix,
+                                    prior = default_dm_prior) {
+  values_raw <- apply(observed_matrix, MARGIN = 1, FUN = function(x) { bootstrap_proportions_dm_single(N, x, prior) })
   wrong_dim_order <- array(values_raw, c(N, ncol(observed_matrix) , nrow(observed_matrix)),
                            dimnames = list(paste0("S",1:N), colnames(observed_matrix), rownames(observed_matrix)))
   aperm(wrong_dim_order, c(1,3,2))
 }
 
 
-sample_posterior_DESeq2 <- function(N, observed_matrix, mapping, design) {
+bootstrap_reads_DESeq2 <- function(N, observed_matrix, mapping, design) {
   library(DESeq2)
   dds <- DESeqDataSetFromMatrix(countData = t(observed_matrix), colData = mapping, design = design)
   dds <- estimateSizeFactors(dds, type = "poscounts")
@@ -163,7 +163,7 @@ sample_posterior_DESeq2 <- function(N, observed_matrix, mapping, design) {
   res
 }
 
-sample_posterior_rarefy <- function(N, observed_matrix, min_depth = min(rowSums(observed_matrix))) {
+bootstrap_reads_rarefy <- function(N, observed_matrix, min_depth = min(rowSums(observed_matrix))) {
   n_otus <- ncol(observed_matrix)
   n_observations <- nrow(observed_matrix)
 
@@ -175,7 +175,7 @@ sample_posterior_rarefy <- function(N, observed_matrix, min_depth = min(rowSums(
   res
 }
 
-sample_posterior_jackknife_observations <- function(observed_matrix) {
+bootstrap_reads_jackknife_observations <- function(observed_matrix) {
   n_otus <- ncol(observed_matrix)
   n_observations <- nrow(observed_matrix)
 
@@ -187,66 +187,67 @@ sample_posterior_jackknife_observations <- function(observed_matrix) {
   res
 }
 
-#Turns value returned by `sample_posterior_dm` into a matrix of size N * nrow(observed_matrix), ncol(observed_matrix)
+#Turns value returned by `bootstrap_reads_dm` into a matrix of size N * nrow(observed_matrix), ncol(observed_matrix)
 #Useful for clustering etc.
-flatten_posterior_samples <- function(posterior_samples, name.delim = "_") {
-  if(is.list(posterior_samples)) {
-    stop("flatten_posterior_samples not yet implemented for list samples")
+flatten_posterior_draws <- function(posterior_draws, name.delim = "_") {
+  if(is.list(posterior_draws)) {
+    stop("flatten_posterior_draws not yet implemented for list draws")
   }
-  dims <- dim(posterior_samples)
-  flat <- matrix(posterior_samples, dims[1] * dims[2], dims[3])
-  combined_names <- expand.grid(dimnames(posterior_samples)[[1]], dimnames(posterior_samples)[[2]])
+  dims <- dim(posterior_draws)
+  flat <- matrix(posterior_draws, dims[1] * dims[2], dims[3])
+  combined_names <- expand.grid(dimnames(posterior_draws)[[1]], dimnames(posterior_draws)[[2]])
   rownames(flat) <- paste0(combined_names[[2]], name.delim, combined_names[[1]])
-  colnames(flat) <- dimnames(posterior_samples)[[3]]
+  colnames(flat) <- dimnames(posterior_draws)[[3]]
   flat
 }
 
 #FUN takes a vector of values for single observation and returns a single number
-summarise_posterior_per_observation <- function(posterior, FUN) {
+summarise_bootstrap_per_observation <- function(bootstrap, FUN) {
   if(is.list(posterior)) {
-    stop("summarise_posterior_per_observation not yet implemented for list samples")
+    stop("summarise_posterior_per_observation not yet implemented for list draws")
   }
-  t(apply(posterior, MARGIN = c(1, 2), FUN = FUN))
+  t(apply(bootstrap, MARGIN = c(1, 2), FUN = FUN))
 }
 
 #FUN takes a matrix of values for all observation and returns a vector number
-summarise_posterior_per_sample <- function(posterior, FUN) {
-  if(is.list(posterior)) {
-    stop("summarise_posterior_per_sample not yet implemented for list samples")
+summarise_bootstrap_per_draw <- function(bootstrap, FUN) {
+  if(is.list(bootstrap)) {
+    stop("summarise_posterior_per_draw not yet implemented for list draws")
   }
-  apply(posterior, MARGIN = c(1), FUN = FUN)
+  apply(bootstrap, MARGIN = c(1), FUN = FUN)
 }
 
-#FUN takes a mtrix of values and returns any object - a list with result per sample is returned
-apply_per_sample <- function(posterior, FUN, ...) {
-  if(is.list(posterior)) {
-    stop("apply_per_sample not yet implemented for list samples")
+#FUN takes a mtrix of values and returns any object - a list with result per draw is returned
+apply_per_draw <- function(bootstrap, FUN, ...) {
+  if(is.list(bootstrap)) {
+    stop("apply_per_draw not yet implemented for list draws")
   }
-  plyr::alply(posterior, .margins = 1, .fun = FUN, ...)
+  plyr::alply(bootstrap, .margins = 1, .fun = FUN, ...)
 }
 
-summarise_posterior_richness <- function(posterior) {
-  summarise_posterior_per_observation(posterior, function(x) { sum(x > 0) })
+summarise_bootstrap_richness <- function(bootstrap) {
+  summarise_bootstrap_per_observation(bootstrap, function(x) { sum(x > 0) })
 }
 
-get_n_posterior_samples <- function(posterior) {
-  if(is.list(posterior)) {
-    n_samples <- length(posterior)
+get_n_bootstrap_draws <- function(bootstrap) {
+  if(is.list(bootstrap)) {
+    n_draws <- length(bootstrap)
   } else {
-    n_samples <- dim(posterior)[1]
+    n_draws <- dim(bootstrap)[1]
   }
+  n_draws
 }
 
-get_posterior_sample <- function(posterior, sample_i) {
-  if(is.list(posterior)) {
-    posterior[[sample_i]]
+get_bootstrap_draw <- function(bootstrap, draw_i) {
+  if(is.list(bootstrap)) {
+    bootstrap[[draw_i]]
   } else {
-    posterior[sample_i,,]
+    bootstrap[draw_i,,]
   }
 }
 
-is_observation_subset <- function(posterior) {
-  attr_val <- attr(posterior, "observation_subset", exact = TRUE)
+is_observation_subset <- function(bootstrap) {
+  attr_val <- attr(bootstrap, "observation_subset", exact = TRUE)
   if(is.null(attr_val)) {
     FALSE
   } else {
