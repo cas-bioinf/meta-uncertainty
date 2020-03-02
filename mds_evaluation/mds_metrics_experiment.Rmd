@@ -21,12 +21,12 @@ if(!dir.exists(output_dir)) {
 ```{r load data}
 datasets <- list()
 
-otus_raw <- read.csv(here("private_data","Dunthorn2017.txt"), stringsAsFactors = FALSE, sep = "\t")
+otus_raw_dunthorn <- read.csv(here("private_data","Dunthorn2017.txt"), stringsAsFactors = FALSE, sep = "\t")
 #otu_tab <- otus_raw %>% as.data.frame() %>% column_to_rownames("X__1") %>% as.matrix()
-otu_tab <- otus_raw %>% select(B005_B006:T199_T200) %>% as.matrix() %>% t()
-otu_tab <- otu_tab[rowSums(otu_tab) > 2000 & rownames(otu_tab) != "B005_B006",]
+otu_tab_dunthorn <- otus_raw_dunthorn %>% select(B005_B006:T199_T200) %>% as.matrix() %>% t()
+otu_tab_dunthorn <- otu_tab_dunthorn[rowSums(otu_tab_dunthorn) > 2000 & rownames(otu_tab_dunthorn) != "B005_B006",]
 
-mapping <- tibble(Sample = rownames(otu_tab)) %>% mutate(Origin = if_else(grepl("^B", Sample), "Panama", if_else(grepl("^L", Sample), "Costa Rica", "Ecuador")))
+mapping_dunthorn <- tibble(Sample = rownames(otu_tab_dunthorn)) %>% mutate(Origin = if_else(grepl("^B", Sample), "Panama", if_else(grepl("^L", Sample), "Costa Rica", "Ecuador")))
 
 ```
 
@@ -34,23 +34,28 @@ mapping <- tibble(Sample = rownames(otu_tab)) %>% mutate(Origin = if_else(grepl(
 ```{r}
 set.seed(20191107)
 
-experiment_dunthorn <- run_mds_experiment(otu_tab = otu_tab,
-                   n_samples_to_use_min = 15,
-                   n_samples_to_use_max = 60,
-                   n_steps = 50,
-                   mapping = mapping,
-                   group_column = Origin,
-                   accept_samples_func = function(mapping_filtered) {
+dunthorn_run_file <- paste0(output_dir,"/run_dunthorn_varying.rds")
+if(!file.exists(dunthorn_run_file)) {
+  experiment_dunthorn_run <- run_mds_experiment(
+    otu_tab = otu_tab_dunthorn,
+    bootstrap_func = bootstrap_func_dm(20),
+    n_observations_to_use_min = 15,
+    n_observations_to_use_max = 60,
+    n_steps = 100,
+    mapping = mapping_dunthorn,
+    accept_subset_func = function(mapping_filtered) {
                       group_counts <- mapping_filtered %>% group_by(Origin) %>% summarise(count = n())
                       nrow(group_counts) == 3 && all(group_counts$count > 2)
                    })
-
-
-saveRDS(experiment_dunthorn, file = paste0(output_dir,"/stats_dunthorn_varying.rds"))
+  
+  saveRDS(experiment_dunthorn_run, file = dunthorn_run_file)
+} else {
+  experiment_dunthorn_run <- readRDS(file = dunthorn_run_file)
+}
 ```
 
 ```{r}
-experiment_dunthorn <- readRDS(file = paste0(output_dir,"/stats_dunthorn_varying.rds"))
+experiment_dunthorn <- eval_mds_experiment(dunthorn_run_file, Origin)
 ```
 
 
@@ -137,13 +142,13 @@ if(!file.exists(geel_run_file)) {
 ```
 
 ```{r}
-experiment_geel <- eval_mds_experiment(
+experiment_geel <- eval_mds_experiment(experiment_geel_run, grassland_type)
 ```
 
 
 ```{r}
-experiment_geel$per_point %>% my_plot(location, squared_error_location, n_samples)
-experiment_geel$per_point %>% my_plot(distances, rmse_distances, n_samples)
+experiment_geel$per_point %>% my_plot(location, squared_error_location, n_observations)
+experiment_geel$per_point %>% my_plot(distances, rmse_distances, n_observations)
 ```
 
 
@@ -157,24 +162,29 @@ experiment_geel$global %>% my_plot(consistency_distances, rmse_distances, n_samp
 ```{r}
 set.seed(201911072)
 
-experiment_geel_jn <- run_mds_experiment(otu_tab = otu_tab_geel,
-                   n_samples_to_use_min = 10,
-                   n_samples_to_use_max = 60,
-                   n_steps = 100,
-                   mapping = mapping_geel,
-                   group_column = grassland_type,
-                   accept_samples_func = function(mapping_filtered) {
-                      group_counts <- mapping_filtered %>% group_by(grassland_type) %>% summarise(count = n())
-                      nrow(group_counts) == 2 && all(group_counts$count > 2)
-                   },
-                   sampling_func = sample_posterior_jackknife_observations
-                   )
-
-saveRDS(experiment_geel_jn, file = paste0(output_dir,"/stats_geel_jn_varying.rds"))
+geel_jn_run_file <- paste0(output_dir,"/run_geel_jn_varying.rds")
+if(!file.exists(geel_jn_run_file)) {
+  experiment_geel_jn_run <- run_mds_experiment(
+    otu_tab = otu_tab_geel_jn,
+    bootstrap_func = bootstrap_reads_jackknife_observations,
+    n_observations_to_use_min = 10,
+    n_observations_to_use_max = 60,
+    n_steps = 100,
+    mapping = mapping_geel_jn,
+    accept_subset_func = function(mapping_filtered) {
+       group_counts <- mapping_filtered %>% group_by(grassland_type) %>% summarise(count = n())
+       nrow(group_counts) == 2 && all(group_counts$count > 2)
+    }
+  )
+  
+  saveRDS(experiment_geel_jn_run, file = geel_jn_run_file)
+} else {
+  experiment_geel_jn_run <- readRDS(file = geel_jn_run_file)
+}
 ```
 
 ```{r}
-experiment_geel_jn <- readRDS(file = paste0(output_dir,"/stats_geel_jn_varying.rds"))
+experiment_geel_jn <- eval_mds_experiment(experiment_geel_jn_run, grassland_type)
 ```
 
 ```{r}
