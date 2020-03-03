@@ -83,15 +83,18 @@ mds_sensitivity_check_eval <- function(compute_result, mapping, group_column = G
                                                           aligned_bootstrap_points,
                                                           group_values)
 
-  res_consistency_location <- consistency_location(base_mds$points, aligned_bootstrap_points)
-  res_consistency_angles <- consistency_angles(base_mds$points, aligned_bootstrap_points)
-  res_consistency_distances <- consistency_distances(base_mds$points, aligned_bootstrap_points)
 
   #Per-point stats
 
   res_consistency_location_per_point <- consistency_location_per_point(base_mds$points, aligned_bootstrap_points)
-  res_consistency_angles_per_point <- consistency_angles_per_point(base_mds$points, aligned_bootstrap_points)
   res_consistency_distances_per_point <- consistency_distances_per_point(base_mds$points, aligned_bootstrap_points)
+  res_consistency_angles_per_point <- consistency_angles_per_point(base_mds$points, aligned_bootstrap_points)
+
+  # Global stats
+  res_consistency_location <- aggregate_consistencies(res_consistency_location_per_point)
+  res_consistency_distances <- aggregate_consistencies(res_consistency_distances_per_point)
+  res_consistency_angles <- aggregate_consistencies(res_consistency_angles_per_point)
+
 
   structure(
     list(base_mds = base_mds,
@@ -101,11 +104,11 @@ mds_sensitivity_check_eval <- function(compute_result, mapping, group_column = G
          group_values = group_values,
          connectivity_stats = res_connectivity_stats,
          consistency_stats = data.frame(consistency_location = res_consistency_location,
-                                        consistency_angles = res_consistency_angles,
-                                        consistency_distances = res_consistency_distances),
+                                        consistency_distances = res_consistency_distances,
+                                        consistency_angles = res_consistency_angles),
          per_point_consistency = data.frame(location = res_consistency_location_per_point,
-                                            angles = res_consistency_angles_per_point,
-                                            distances = res_consistency_distances_per_point)
+                                            distances = res_consistency_distances_per_point,
+                                            angles = res_consistency_angles_per_point)
     ),
     class = "mds_sensitivity"
   )

@@ -1,6 +1,10 @@
 # Ideas and TODO
 
-- Synthetic data - continous mixture of two different populations
+- Unifrac!
+
+- Test stability of linear models over reduced space
+
+- Synthetic data - continous mixture of three different populations - simplex. We know the exact reduced dimensions (at least for cmdscale)
 
 - Language - avoid "sample" whenever possible - "bootstrap" - the process, "draw" (from bootstrap), "observation" (a row in the data),
   "read" for a single element of an observation/draw, "

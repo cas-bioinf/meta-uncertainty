@@ -1,0 +1,85 @@
+---
+title: "Enterotypes"
+output: html_notebook
+---
+
+```{r setup}
+library(tidyverse)
+library(here)
+library(vegan)
+library(cowplot)
+library(doParallel)
+library(readxl)
+library(rstan)
+library(phyloseq)
+library(ade4)
+
+options(mc.cores = parallel::detectCores())
+rstan_options(auto_write = TRUE)
+
+devtools::load_all()
+
+registerDoParallel(parallel::detectCores())
+```
+
+
+```{r}
+set.seed(20190625)
+
+data("enterotype")
+ps_data <- subset_samples(enterotype, SeqTech == "Sanger")
+
+
+mapping <- ps_data@sam_data %>% 
+  filter(!is.na(Enterotype)) %>%
+  mutate(Enterotype = forcats::fct_explicit_na(Enterotype), Sample = Sample_ID)
+
+otu_tab <- t(ps_data@otu_table)[as.character(mapping$Sample),]
+
+
+mds_enterotypes <- function(otu_tab) {
+  ps_data_for_dist <- phyloseq(otu_table = otu_table(otu_tab, taxa_are_rows = FALSE))
+  data.dist = phyloseq::distance(ps_data_for_dist,method="jsd")
+  #dudi.pco(data.dist,scannf=F,nf=3)
+  
+  #They actually run PCA on 3 components but show only the first 2
+  mds_res <- cmdscale(data.dist, add = TRUE, list. = TRUE, k = 3)
+  mds_res$points <- mds_res$points[, 1:2]
+  mds_res
+  #metaMDS(data.dist, parallel = 1, trace = 0)
+}
+
+
+plot_mds_enterotypes <- function(base_mds, mapping, aligned_samples = NULL, ...) {
+  plot_mds(base_mds, mapping, aligned_samples, color_aes = Enterotype, shape_aes = Enterotype) + scale_x_continuous(trans = "reverse")
+}
+
+base_mds <- mds_enterotypes(otu_tab)
+plot_mds_enterotypes(base_mds, mapping)
+#s.class(base_mds$li, grid = F, fac = mapping$Enterotype)
+```
+
+```{r}
+set.seed(2019062514)
+mds_samples_dm <- sample_posterior_dm(20, otu_tab, prior = "ml",N_reads = "original") %>% 
+  apply_per_sample(FUN = mds_enterotypes) %>% purrr::map(vegan::procrustes, X = base_mds)
+
+```
+
+```{r}
+plot_mds_enterotypes(base_mds, mapping, aligned_samples = mds_samples_dm)
+```
+
+```{r}
+set.seed(2019062518)
+mds_samples_rarefy <- sample_posterior_rarefy(20, otu_tab) %>% 
+  apply_per_sample(FUN = mds_enterotypes) %>% purrr::map(vegan::procrustes, X = base_mds)
+
+```
+
+```{r}
+plot_mds_enterotypes(base_mds, mapping, aligned_samples = mds_samples_dm)
+```
+
+
+

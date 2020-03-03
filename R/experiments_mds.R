@@ -64,16 +64,31 @@ eval_mds_experiment <- function(run_result, group_column) {
     full_mds_subset <- full_mds$points[observations_to_use,]
     procrustes_to_full <- vegan::procrustes(full_mds_subset, sens_check$base_mds)
 
-    rmse_angles <- sqrt( mean(
-      (compute_angles(full_mds_subset) - compute_angles(sens_check$base_mds$points)) ^ 2 ))
+
+    location_error_per_point <- sqrt(rowSums((full_mds_subset - procrustes_to_full$Yrot) ^ 2))
+
+    rmse_distances_per_point <- sqrt(rowMeans((
+      as.matrix(dist(full_mds_subset, method = "euclidean")) -
+        as.matrix(dist(procrustes_to_full$Yrot, method = "euclidean"))) ^ 2))
 
     rmse_distances <- sqrt( mean(
       (dist(full_mds_subset, method = "euclidean") - dist(procrustes_to_full$Yrot, method = "euclidean")) ^ 2 ))
 
-    squared_error_location_per_point <- rowSums((full_mds_subset - procrustes_to_full$Yrot) ^ 2)
-    rmse_distances_per_point <- sqrt(rowMeans((
-      as.matrix(dist(full_mds_subset, method = "euclidean")) -
-      as.matrix(dist(procrustes_to_full$Yrot, method = "euclidean"))) ^ 2))
+
+    angles_full_subset <- compute_angles(full_mds_subset)
+    angles_step <- compute_angles(sens_check$base_mds$points)
+
+    rmse_angles_per_point <- numeric(n_observations_to_use)
+    for(p in 1:n_observations_to_use){
+      rmse_angles_per_point[p] <- sqrt(mean(
+        (get_angles_per_point(angles_full_subset, n_observations_to_use, p) -
+          get_angles_per_point(angles_step, n_observations_to_use, p)) ^ 2))
+    }
+
+    rmse_angles <- sqrt( mean(
+      (angles_full_subset - angles_step) ^ 2 ))
+
+
 
     stats_list[[n]] <- sens_check$connectivity_stats %>%
       summarise(min_connectivity_min = min(connectivity_min),
@@ -83,15 +98,16 @@ eval_mds_experiment <- function(run_result, group_column) {
       mutate( step = n,
               n_observations = n_observations_to_use,
               rmse_location = sqrt(procrustes_to_full$ss / n_observations_to_use),
-              rmse_angles = rmse_angles,
-              rmse_distances = rmse_distances
+              rmse_distances = rmse_distances,
+              rmse_angles = rmse_angles
               ) %>%
       crossing(sens_check$consistency_stats)
 
     per_point_stats_list[[n]] <- cbind(sens_check$per_point_consistency, n_observations = n_observations_to_use,
                                        data.frame(step = n, observation = observations_to_use,
-                                                  squared_error_location = squared_error_location_per_point,
-                                                  rmse_distances = rmse_distances_per_point))
+                                                  location_error = location_error_per_point,
+                                                  rmse_distances = rmse_distances_per_point,
+                                                  rmse_angles = rmse_angles_per_point))
 
     if(n %% 10 == 0) {
       cat("Step", n, " completed\n")
@@ -101,5 +117,6 @@ eval_mds_experiment <- function(run_result, group_column) {
 
   list(global = stats_list %>% do.call(rbind, .),
        per_point = per_point_stats_list %>% do.call(rbind, .),
-       sens_checks = sens_check_list)
+       sens_checks = sens_check_list,
+       step_results = step_results)
 }

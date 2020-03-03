@@ -4,11 +4,11 @@ test_that("consistency_location", {
   expect_equivalent(consistency_location_per_point(base_points, list(base_points, base_points)),
                     c(1,1,1), tolerance = tol)
 
-  # I previously computed the test case for max distance, but now use mean
-  mean_distance_squared <- mean(dist(base_points, method = "euclidean")) ^ 2
+  # I previously computed the test case for max distance, but now use distance scaling
+  scale_factor <- distance_scaling(base_points)
   max_distance_squared <- max(dist(base_points, method = "euclidean")) ^ 2
   expect_equivalent(consistency_location_per_point(base_points, list(base_points * 0.5, base_points * 0.3)),
-                    1 - sqrt(c(0, 0.5 ^ 2 + 0.7^2,0.5^2 + 0.7^2) * max_distance_squared / (2 * 2 * mean_distance_squared)), tolerance = tol)
+                    1 - sqrt(c(0, 0.5 ^ 2 + 0.7^2,0.5^2 + 0.7^2) * max_distance_squared / (2 * 2 * scale_factor)), tolerance = tol)
 
 })
 

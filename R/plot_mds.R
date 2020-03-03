@@ -59,5 +59,5 @@ plot_mds <- function(base_mds, mapping = NULL, aligned_samples = NULL,  color_ae
 
 plot.mds_sensitivity <- function(mds_sensitivity, ...) {
   plot_mds(mds_sensitivity$base_mds, mapping = mds_sensitivity$mapping,
-           aligned_samples = mds_sensitivity$resampled_aligned_mds, ...)
+           aligned_samples = mds_sensitivity$aligned_bootstrap_mds, ...)
 }

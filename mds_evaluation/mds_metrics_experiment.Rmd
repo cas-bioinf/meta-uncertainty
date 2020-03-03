@@ -11,6 +11,7 @@ library(readxl)
 library(here)
 library(cowplot)
 library(vegan)
+theme_set(theme_cowplot())
 output_dir <- here::here("local_temp_data")
 if(!dir.exists(output_dir)) {
   dir.create(output_dir)
@@ -55,16 +56,21 @@ if(!file.exists(dunthorn_run_file)) {
 ```
 
 ```{r}
-experiment_dunthorn <- eval_mds_experiment(dunthorn_run_file, Origin)
+experiment_dunthorn <- eval_mds_experiment(experiment_dunthorn_run, Origin)
+experiment_dunthorn$per_point <- experiment_dunthorn$per_point %>% mutate(min_nobs = min(n_observations), n_observations_norm = (n_observations - min_nobs) / (max(n_observations) - min_nobs))
+experiment_dunthorn$global <- experiment_dunthorn$global %>% mutate(min_nobs = min(n_observations), n_observations_norm = (n_observations - min_nobs) / (max(n_observations) - min_nobs))
+
 ```
 
 
 ```{r}
-my_plot <- function(data, x,y, color = NULL) {
+my_plot <- function(data, x,y, color = NULL, shape = NULL, alpha = 1, group = 1) {
   x <- enquo(x)
   y <- enquo(y)
   color <- enquo(color)
-  ggplot(data, aes(!!x, !!y, color = !!color)) + geom_jitter(width = 0, height = 0) + geom_smooth(method = "lm") + scale_color_distiller(palette = "Spectral")
+  shape <- enquo(shape)
+  group <- enquo(group)
+  ggplot(data, aes(!!x, !!y, color = !!color, shape = !!shape, group = !! group)) + geom_jitter(width = 0, height = 0, alpha = alpha) + geom_smooth(method = "lm") + scale_color_distiller(palette = "Spectral")
 }
 
 # stats %>% my_plot(n_samples, rmse)
@@ -77,23 +83,61 @@ my_plot <- function(data, x,y, color = NULL) {
 ```
 
 ```{r}
-experiment_dunthorn$per_point %>% my_plot(location, squared_error_location, n_samples)
-experiment_dunthorn$per_point %>%my_plot(distances, rmse_distances, n_samples)
+#experiment_dunthorn$per_point %>% filter(step %in% c(81,sample(step, 5))) %>% my_plot(location, location_error, step, shape = factor(step))
+experiment_dunthorn$per_point %>% my_plot(location, location_error, n_observations)
+experiment_dunthorn$per_point %>% my_plot(distances, rmse_distances, n_observations)
+experiment_dunthorn$per_point %>% my_plot(angles, rmse_angles, n_observations)
+```
+
+```{r}
+lm(location_error ~ location + n_observations_norm, data = experiment_dunthorn$per_point)
+lm(rmse_distances ~ distances + n_observations_norm, data = experiment_dunthorn$per_point)
+lm(rmse_angles ~ angles + n_observations_norm, data = experiment_dunthorn$per_point)
 ```
 
 
 ```{r}
-experiment_dunthorn$global %>% my_plot(consistency_location, rmse_location, n_samples)
-experiment_dunthorn$global %>% my_plot(consistency_distances, rmse_distances, n_samples) 
-experiment_dunthorn$global %>% my_plot(consistency_angles, rmse_angles, n_samples) 
+experiment_dunthorn$global %>% my_plot(n_observations, rmse_distances)
+
+```
+
+```{r}
+experiment_dunthorn$per_point %>% group_by(step, n_observations) %>% summarise(consistency_location = 1 - sqrt(sum((1 - location)^2) / (unique(n_observations) - 1))) %>%   inner_join(experiment_dunthorn$global %>% select(-consistency_location, -n_observations), by = c("step" = "step")) %>%
+  my_plot(consistency_location, rmse_location, n_observations)
 ```
 
 
 ```{r}
-experiment_dunthorn$global %>% filter(consistency_distances < 0.6)
-plot(experiment_dunthorn$sens_checks[[32]], color_aes = Origin, shape_aes = Origin)
+experiment_dunthorn$global %>% my_plot(consistency_location, rmse_location, n_observations)
+experiment_dunthorn$global %>% my_plot(consistency_distances, rmse_distances, n_observations) 
+experiment_dunthorn$global %>% my_plot(consistency_angles, rmse_angles, n_observations) 
+```
+
+```{r}
+lm(rmse_location ~ consistency_location, data = experiment_dunthorn$global)
+lm(rmse_location ~ consistency_location + n_observations_norm, data = experiment_dunthorn$global)
+lm(rmse_distances ~ consistency_distances, data = experiment_dunthorn$global)
+lm(rmse_distances ~ consistency_distances + n_observations_norm, data = experiment_dunthorn$global)
+lm(rmse_angles ~ consistency_angles, data = experiment_dunthorn$global)
+lm(rmse_angles ~ consistency_angles + n_observations_norm, data = experiment_dunthorn$global)
 
 ```
+
+
+```{r}
+experiment_dunthorn$global %>% filter(consistency_location < 0.3)
+plot(experiment_dunthorn$sens_checks[[81]], color_aes = Origin, shape_aes = Origin)
+
+```
+
+```{r}
+test_mds <- metaMDS(experiment_dunthorn$step_results[[81]]$otu_tab_filtered, scaling = TRUE)
+plot_mds(test_mds)
+test_mds
+test_mds$points %>% colMeans()
+test_mds$points %>% colMeans() %>% rep(each = 10) %>% matrix(ncol = 2)
+```
+
 
 ```{r}
 max(dist(experiment_dunthorn$sens_checks[[32]]$base_mds$points, method = "euclidean"))
@@ -147,17 +191,26 @@ experiment_geel <- eval_mds_experiment(experiment_geel_run, grassland_type)
 
 
 ```{r}
-experiment_geel$per_point %>% my_plot(location, squared_error_location, n_observations)
+experiment_geel$per_point %>% my_plot(location, location_error, n_observations)
 experiment_geel$per_point %>% my_plot(distances, rmse_distances, n_observations)
+experiment_geel$per_point %>% my_plot(angles, rmse_angles, n_observations)
 ```
 
 
 ```{r}
-experiment_geel$global %>% my_plot(consistency_location, rmse_location, n_samples)
-experiment_geel$global %>% my_plot(consistency_angles, rmse_angles, n_samples) 
-experiment_geel$global %>% my_plot(consistency_distances, rmse_distances, n_samples) 
+experiment_geel$global %>% my_plot(consistency_location, rmse_location, n_observations)
+experiment_geel$global %>% my_plot(consistency_distances, rmse_distances, n_observations) 
+experiment_geel$global %>% my_plot(consistency_angles, rmse_angles, n_observations) 
 
 ```
+
+```{r}
+lm(location_error ~ location + n_observations, data = experiment_geel$per_point)
+lm(rmse_distances ~ distances + n_observations, data = experiment_geel$per_point)
+lm(rmse_angles ~ angles + n_observations, data = experiment_geel$per_point)
+
+```
+
 
 ```{r}
 set.seed(201911072)
@@ -165,12 +218,12 @@ set.seed(201911072)
 geel_jn_run_file <- paste0(output_dir,"/run_geel_jn_varying.rds")
 if(!file.exists(geel_jn_run_file)) {
   experiment_geel_jn_run <- run_mds_experiment(
-    otu_tab = otu_tab_geel_jn,
+    otu_tab = otu_tab_geel,
     bootstrap_func = bootstrap_reads_jackknife_observations,
     n_observations_to_use_min = 10,
     n_observations_to_use_max = 60,
     n_steps = 100,
-    mapping = mapping_geel_jn,
+    mapping = mapping_geel,
     accept_subset_func = function(mapping_filtered) {
        group_counts <- mapping_filtered %>% group_by(grassland_type) %>% summarise(count = n())
        nrow(group_counts) == 2 && all(group_counts$count > 2)
@@ -188,16 +241,25 @@ experiment_geel_jn <- eval_mds_experiment(experiment_geel_jn_run, grassland_type
 ```
 
 ```{r}
-experiment_geel_jn$per_point %>% my_plot(location, squared_error_location, n_samples)
-experiment_geel_jn$per_point %>% my_plot(distances, rmse_distances, n_samples)
+experiment_geel_jn$per_point %>% my_plot(location, location_error, n_observations)
+experiment_geel_jn$per_point %>% my_plot(distances, rmse_distances, n_observations)
+experiment_geel_jn$per_point %>% my_plot(angles, rmse_angles, n_observations)
+
+```
+
+```{r}
+lm(location_error ~ location + n_observations, data = experiment_geel_jn$per_point)
+lm(rmse_distances ~ distances + n_observations, data = experiment_geel_jn$per_point)
+lm(rmse_angles ~ angles + n_observations, data = experiment_geel_jn$per_point)
+
 
 ```
 
 
 ```{r}
-experiment_geel_jn$global %>% my_plot(consistency_location, rmse_location, n_samples)
-experiment_geel_jn$global %>% my_plot(consistency_distances, rmse_distances, n_samples) 
-experiment_geel_jn$global %>% my_plot(consistency_angles, rmse_angles, n_samples) 
+experiment_geel_jn$global %>% my_plot(consistency_location, rmse_location, n_observations)
+experiment_geel_jn$global %>% my_plot(consistency_distances, rmse_distances, n_observations) 
+experiment_geel_jn$global %>% my_plot(consistency_angles, rmse_angles, n_observations) 
 
 ```
 
