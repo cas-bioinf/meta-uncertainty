@@ -9,6 +9,8 @@
 - Language - avoid "sample" whenever possible - "bootstrap" - the process, "draw" (from bootstrap), "observation" (a row in the data),
   "read" for a single element of an observation/draw, "
 
+- Show how all forms of consistency behave as I increase the dimension of the latent space (they should quickly grow to 1)
+
 - Parallel coordinates plots to show more dimensions
 
 - Find a threshold (number of samples kept) where the orginal MDS structure ceases to be recognizable
