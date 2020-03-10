@@ -1,4 +1,4 @@
-metaMDS_per_draw <- function(bootstrap, cores = parallel::detectCores(), ...) {
+metaMDS_per_draw <- function(bootstrap, cores = metagenboot_options("cores"), ...) {
   cl <- parallel::makePSOCKcluster(cores);
   currentLibPaths <- .libPaths()
   tryCatch({

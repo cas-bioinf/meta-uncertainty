@@ -17,7 +17,6 @@ theme_set(theme_cowplot())
 
 devtools::load_all()
 
-doParallel::registerDoParallel(parallel::detectCores())
 ```
 
 The data has to downloaded manually at https://nph.onlinelibrary.wiley.com/doi/abs/10.1111/nph.14947 - TableS2 and saved to `local_data/vanGeel2017.xlsx`
@@ -54,7 +53,7 @@ plot_mds_van_geel <- function(base_mds, mapping, aligned_samples = NULL, show_pa
 
 ```{r}
 set.seed(201905103)
-base_mds <- otu_tab %>% metaMDS(trymax = 100, parallel = parallel::detectCores())
+base_mds <- otu_tab %>% metaMDS(trymax = 100, parallel = metagenboot_options('cores'))
 plot_mds_van_geel(base_mds, mapping) + facet_wrap(~type)
 plot_mds_van_geel(base_mds, mapping)
 ```

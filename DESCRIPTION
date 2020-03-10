@@ -20,4 +20,5 @@ Imports:
     MCMCpack,
     igraph,
     rlang,
-    tidyr
+    tidyr,
+    settings
