@@ -1,10 +1,19 @@
-plot_mds <- function(base_mds, mapping = NULL, aligned_samples = NULL,  color_aes = NULL, shape_aes = NULL, show_paths = "all", sample_point_alpha = 0.3) {
+plot_mds <- function(base_mds = NULL, mapping = NULL, aligned_samples = NULL,
+                     color_aes = NULL, shape_aes = NULL, show_paths = "all",
+                     variability = "overplot",
+                     sample_point_alpha = 0.3
+                     ) {
   color_aes <- enquo(color_aes)
   shape_aes <- enquo(shape_aes)
 
 
+  if(variability == "facet") {
+    show_paths <- "none"
+  }
+
   n_samples <- length(aligned_samples)
-  if(is.null(aligned_samples) || show_paths == "none" || show_paths == 0) {
+  if(is.null(aligned_samples) || (is.null(base_mds) && length(aligned_samples) == 1) ||
+     show_paths == "none" || show_paths == 0) {
     path_geom <- NULL
     path_frac <- 0
     path_group_indices = rep(1, n_samples)
@@ -28,20 +37,38 @@ plot_mds <- function(base_mds, mapping = NULL, aligned_samples = NULL,  color_ae
   to_data <- function(x) {
     x %>% as.data.frame() %>% set_names("MDS1","MDS2") %>% rownames_to_column("observation")
   }
-  base_points <- base_mds$points %>% to_data() %>% mutate(sample = "Orig")
-
 
   sampled_points <- aligned_samples %>%
     purrr::imap(~ .x$Yrot %>% to_data() %>%
                   mutate(sample = paste0("S_",.y))
-               ) %>%
+    ) %>%
     do.call(rbind, .)
 
-  data_to_plot <- rbind(base_points, sampled_points)
+  if(is.null(base_mds)) {
+    if(is.null(aligned_samples)) {
+      stop("Either base_mds or aligned_samples must not be null")
+    }
+    data_to_plot <- rbind(sampled_points)
+
+  } else {
+    base_points <- base_mds$points %>% to_data() %>% mutate(sample = "Orig")
+    data_to_plot <- rbind(base_points, sampled_points)
+  }
+
+
+
 
   if(!is.null(mapping)) {
     data_to_plot <- data_to_plot %>%
       inner_join(mapping %>% mutate(Sample = as.character(Sample)), by =c("observation" = "Sample"))
+  }
+
+  if(variability == "overplot") {
+    my_aes <- aes(MDS1, MDS2, shape = !!shape_aes, color = !!color_aes, size = is_original, alpha = is_original)
+    facet <- NULL
+  } else if(variability == "facet") {
+    my_aes <- aes(MDS1, MDS2, shape = !!shape_aes, color = !!color_aes)
+    facet <- facet_wrap(~sample)
   }
 
   data_to_plot %>%
@@ -50,11 +77,12 @@ plot_mds <- function(base_mds, mapping = NULL, aligned_samples = NULL,  color_ae
     mutate(path_group = ifelse(is_original, 1, sample(path_group_indices))) %>% #deliberately not using if_else as I need to hack around a bit
     ungroup() %>%
     sample_frac() %>% #resamples everything - just reorders, to have random paths
-    ggplot(aes(MDS1, MDS2, shape = !!shape_aes, color = !!color_aes, size = is_original, alpha = is_original)) +
+    ggplot(my_aes) +
     path_geom +
     geom_point() +
     scale_size_manual(values = c("FALSE" = 1, "TRUE" = 3)) +
-    scale_alpha_manual(values = c("FALSE" = sample_point_alpha, "TRUE" = 1))
+    scale_alpha_manual(values = c("FALSE" = sample_point_alpha, "TRUE" = 1)) +
+    facet
 }
 
 plot.mds_sensitivity <- function(mds_sensitivity, ...) {

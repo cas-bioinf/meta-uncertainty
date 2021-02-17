@@ -1,0 +1,69 @@
+---
+title: "Global Patterns"
+output: html_notebook
+---
+
+```{r setup}
+library(tidyverse)
+library(here)
+library(phyloseq)
+library(vegan)
+
+library(cowplot)
+theme_set(theme_cowplot())
+
+devtools::load_all()
+
+doParallel::registerDoParallel(parallel::detectCores())
+```
+
+
+```{r}
+data("GlobalPatterns")
+GP = prune_taxa(taxa_sums(GlobalPatterns)>0, GlobalPatterns)
+GP_mapping <- GP@sam_data %>% as_tibble() %>% mutate(Sample = X.SampleID, Human = SampleType %in% c("Feces", "Mock", "Skin", "Tongue"))
+gp_otu <- as.matrix(t(GP@otu_table))
+```
+
+
+```{r}
+plot_mds_gp <- function(base_mds, mapping, ...) {
+  plot_mds(base_mds, mapping, color_aes = SampleType, shape_aes = Human)
+}
+```
+
+```{r}
+base_mds <- metaMDS(gp_otu)
+plot_mds_gp(base_mds, GP_mapping)
+
+```
+
+
+```{r}
+sens <- mds_sensitivity_check(gp_otu, mapping = GP_mapping, group_column = SampleType, trace = 0)
+```
+
+```{r}
+plot.mds_sensitivity(sens, color_aes = SampleType, shape_aes = Human)
+```
+
+Note that skin, tongue and soil are not really considered stable in their relative locations. Indeed, the `phyloseq` example at http://joey711.github.io/phyloseq/plot_ordination-examples has soil distinctly apart from skin and tongue.
+
+```{r}
+unifrac_mds <- metaMDS(phyloseq::UniFrac(GP, weighted = TRUE, fast = TRUE))
+plot_mds_gp(unifrac_mds, GP_mapping)
+
+```
+```{r}
+wunifrac_f <- function(x) {
+  pq <- phyloseq(otu_table(x, taxa_are_rows = FALSE), GP@tax_table, GP@sam_data, GP@phy_tree)
+  phyloseq::UniFrac(pq, weighted = TRUE, fast = TRUE)  
+}
+
+sens_unifrac <- mds_sensitivity_check(gp_otu, mapping = GP_mapping, group_column = SampleType, trace = 0, prepare_for_mds_func = wunifrac_f)
+```
+
+
+```{r}
+plot.mds_sensitivity(sens_unifrac, color_aes = SampleType, shape_aes = Human)
+```

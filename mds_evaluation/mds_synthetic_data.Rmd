@@ -19,57 +19,65 @@ theme_set(cowplot::theme_cowplot())
 #theme_update(panel.background = element_rect(fill = "#e0e0e0"))
 ```
 
-```{r}
-#set.seed(646822)
-n_populations <- 4
-n_observations <- 100
-quick_test_raw <- synthetic_convex_mixture(300, n_observations, n_populations, include_raw_populations = TRUE, mixing_prior = 0.01)
 
-
-```
 
 ```{r}
-n_observations_subset <- 30
-
-#Make sure the raw populations are included
-subset_observations <- c(1:n_populations, sample((n_populations + 1):n_observations, n_observations_subset - n_populations))
-
-quick_test <- list()
-quick_test$otu_t <- quick_test_raw$otu_t[subset_observations,]
-quick_test$mapping <- quick_test_raw$mapping[subset_observations, ]
-
-
-test_mds <- metaMDS(quick_test$otu_t, trymax = 50, maxit = 200)
-for(p in 1:n_populations) {
-  mds_plot <- plot_mds(test_mds, mapping = quick_test$mapping, color_aes = !! sym(paste0("mixing.",p))) +   scale_color_distiller(type = "div")
-  print(mds_plot)
+generate_regular <- function(N_sides, N_replicates = 1) {
+  true_regular <- array(NA_real_, dim = c(N_sides, N_sides * 5))
+  otus_regular <- array(NA_integer_, dim = c(N_sides * N_replicates, N_sides * 5))
+  
+  regular_mapping <- data.frame(Sample = as.character(1:(N_sides * N_replicates)), Group = rep(as.character((1:N_sides)), each = N_replicates))
+  
+  for(i in 1:N_sides) {
+    other_indices = (1:N_sides)[-i]
+    true_regular[i, i] <- 50
+    true_regular[i, other_indices] <- 10
+    true_regular[i, i + N_sides] <- 0.1
+    true_regular[i, other_indices + N_sides] <- 8
+    true_regular[i, i + N_sides * 2] <- 3
+    true_regular[i, other_indices + N_sides * 2] <- 0.1
+    true_regular[i, i + N_sides * 3] <- 2
+    true_regular[i, other_indices + N_sides * 3] <- 0.1
+    true_regular[i, i + N_sides * 4] <- 1
+    true_regular[i, other_indices + N_sides * 4] <- 0.1
+    
+    for(otu in which(regular_mapping$Group == as.character(i))) {
+      noisy_mean <- true_regular[i,] * rlnorm(N_sides * 5, meanlog = 0, sdlog = 0.1)
+      otus_regular[otu, ] <- rmultinom(1, N_sides * 200, noisy_mean) 
+    }
+  }
+  
+  
+  list(true = true_regular, otus = otus_regular, mapping = regular_mapping)
 }
 
+regular_4 <- generate_regular(4)
+
+#vegdist(otus_regular)
+
+sens_regular <- mds_sensitivity_check(regular_4$otus, regular_4$mapping)
+```
+```{r}
+plot.mds_sensitivity(sens_regular, color_aes = Group)
+plot.mds_sensitivity(sens_regular, color_aes = Group, variability = "facet")
 ```
 
 ```{r}
-gapstat <- phyloseq::gapstat_ord(test_mds, FUNcluster = kmeans)
-gapstat
-cluster::maxSE(gapstat$Tab[,"gap"], gapstat$Tab[,"SE.sim"])
+regular_4_5 <- generate_regular(4, N_replicates = 5)
+
+sens_regular_4_5 <- mds_sensitivity_check(regular_4_5$otus, regular_4_5$mapping)
 ```
-
-
 ```{r}
-sens_check <- mds_sensitivity_check(20, quick_test$otu_t, mapping = quick_test$mapping %>% mutate(Group = "A"), maxit = 50)
-plot(sens_check, color_aes = mixing.1) + scale_color_distiller(type = "div")
-sens_check$connectivity_stats
-sens_check$consistency_stats
+plot.mds_sensitivity(sens_regular_4_5, color_aes = Group)
+plot.mds_sensitivity(sens_regular_4_5, color_aes = Group, variability = "facet")
 ```
-
-
-
-
 ```{r}
-for(p in 1:n_populations) {
-  lm_data <- as.data.frame(test_mds$points) %>% mutate(mix = quick_test$mapping[[paste0("mixing.",p)]])
-  lm_fit <-  lm(mix ~ MDS1 + MDS2, data = lm_data)
-  cat("Populaion",p,"\n")
-  summary(lm_fit) %>% print()
-}
+sens_regular_4_5_jk <- mds_sensitivity_check(regular_4_5$otus, regular_4_5$mapping, 
+                                             bootstrap_func = bootstrap_reads_jackknife_observations)
+
+plot.mds_sensitivity(sens_regular_4_5_jk, color_aes = Group)
+
 ```
+
+
 

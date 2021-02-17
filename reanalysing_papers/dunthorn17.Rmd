@@ -64,8 +64,8 @@ Running the Dirichlet-multinomial bootstrap
 
 ```{r}
 #Here, group_column needs to be filled, it is needed for the connectivity metric (not directly using right now, but it is of interest). group_column should be the main factor in the data.
-sens <- mds_sensitivity_check(20, otu_tab, mapping, group_column = Origin, trace = 0)
-plot(sens,color_aes = Origin, shape_aes = Origin, sample_point_alpha = 0.2)
+sens <- mds_sensitivity_check(otu_tab, mapping, group_column = Origin, trace = 0)
+plot.mds_sensitivity(sens,color_aes = Origin, shape_aes = Origin, sample_point_alpha = 0.2)
 sens$connectivity_stats
 sens$consistency_stats
 ```

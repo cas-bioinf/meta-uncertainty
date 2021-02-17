@@ -1,19 +1,26 @@
-metaMDS_per_draw <- function(bootstrap, cores = metagenboot_options("cores"), ...) {
+metaMDS_per_draw <- function(bootstrap, cores = metagenboot_options("cores"),
+                             prepare_for_mds_func = identity, ...) {
   cl <- parallel::makePSOCKcluster(cores);
   currentLibPaths <- .libPaths()
+  data_for_parallel <- list()
+
+  for(draw in 1:get_n_bootstrap_draws(bootstrap)) {
+    data_for_parallel[[draw]] <- prepare_for_mds_func(metagenboot::get_bootstrap_draw(bootstrap, draw))
+  }
+
   tryCatch({
     parallel::clusterExport(cl, "currentLibPaths", environment())
     parallel::clusterEvalQ(cl, .libPaths(currentLibPaths))
     parallel::clusterExport(cl, "bootstrap", environment())
-    parallel::parLapplyLB(cl, 1:get_n_bootstrap_draws(bootstrap),
-                          fun = function(i) {vegan::metaMDS(metagenboot::get_bootstrap_draw(bootstrap,i), parallel = 1, ...)},
+    parallel::parLapplyLB(cl, data_for_parallel,
+                          fun = function(x) {vegan::metaMDS(x, parallel = 1, ...)},
                           chunk.size = 1)
   }, finally = {
     parallel::stopCluster(cl)
   })
 }
 
-align_single_MDS <- function(mds_to_align, base_mds, allow_unaligned = FALSE) {
+align_single_MDS <- function(mds_to_align, base_mds, allow_unaligned = FALSE, scale = FALSE) {
   if(!identical(rownames(vegan::scores(base_mds)), rownames(vegan::scores(mds_to_align)))) {
     if(!allow_unaligned) {
       stop("Observations are not aligned")
@@ -21,9 +28,11 @@ align_single_MDS <- function(mds_to_align, base_mds, allow_unaligned = FALSE) {
     all_obs_base <- rownames(vegan::scores(base_mds))
     all_obs_to_align <- rownames(vegan::scores(mds_to_align))
     selected_observations <- all_obs_base[all_obs_base %in% all_obs_to_align]
-    vegan::procrustes(X = vegan::scores(base_mds)[selected_observations,], Y = vegan::scores(mds_to_align)[selected_observations,])
+    vegan::procrustes(X = vegan::scores(base_mds)[selected_observations,],
+                      Y = vegan::scores(mds_to_align)[selected_observations,],
+                      scale = scale)
   } else {
-    vegan::procrustes(X = base_mds, Y = mds_to_align)
+    vegan::procrustes(X = base_mds, Y = mds_to_align, scale = scale)
   }
 }
 
@@ -35,12 +44,14 @@ bootstrap_func_dm <- function(N_draws, N_reads = "original", prior = default_dm_
 }
 
 mds_sensitivity_check_compute <- function(observed_matrix, bootstrap_func = bootstrap_func_dm(20),
+                                          prepare_for_mds_func = identity,
                                           ...) {
+
   if(!is.matrix(observed_matrix)) {
     stop("observed_matrix has to be a matrix")
   }
 
-  base_mds <- observed_matrix %>% vegan::metaMDS(...)
+  base_mds <- observed_matrix %>% prepare_for_mds_func %>% vegan::metaMDS(...)
 
   bootstrap_func <- rlang::as_function(bootstrap_func)
   draws <- bootstrap_func(observed_matrix)
@@ -118,10 +129,11 @@ mds_sensitivity_check <- function(observed_matrix, mapping,
                                   group_column = Group,
                                   id_column = Sample,
                                   bootstrap_func = bootstrap_func_dm(20),
+                                  prepare_for_mds_func = identity,
                                   ...) {
 
-  compute_result <- mds_sensitivity_check_compute(observed_matrix, bootstrap_func, ...)
+  compute_result <- mds_sensitivity_check_compute(observed_matrix, bootstrap_func, prepare_for_mds_func = prepare_for_mds_func, ...)
 
-  mds_sensitivity_check_eval(compute_result, mapping, group_column, id_column)
+  mds_sensitivity_check_eval(compute_result, mapping, {{group_column}}, {{id_column}})
 }
 

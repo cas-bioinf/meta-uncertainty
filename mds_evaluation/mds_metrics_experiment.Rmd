@@ -17,19 +17,19 @@ if(!dir.exists(output_dir)) {
   dir.create(output_dir)
 }
 
-metagenboot_options(cores = 3)
+metagenboot_options(cores = 10)
 ```
 
 
 ```{r load data}
 datasets <- list()
 
-otus_raw_dunthorn <- read.csv(here("private_data","Dunthorn2017.txt"), stringsAsFactors = FALSE, sep = "\t")
+otus_raw_gp <- read.csv(here("local_data","gp2017.txt"), stringsAsFactors = FALSE, sep = "\t")
 #otu_tab <- otus_raw %>% as.data.frame() %>% column_to_rownames("X__1") %>% as.matrix()
-otu_tab_dunthorn <- otus_raw_dunthorn %>% select(B005_B006:T199_T200) %>% as.matrix() %>% t()
-otu_tab_dunthorn <- otu_tab_dunthorn[rowSums(otu_tab_dunthorn) > 2000 & rownames(otu_tab_dunthorn) != "B005_B006",]
+otu_tab_gp <- otus_raw_gp %>% select(B005_B006:T199_T200) %>% as.matrix() %>% t()
+otu_tab_gp <- otu_tab_gp[rowSums(otu_tab_gp) > 2000 & rownames(otu_tab_gp) != "B005_B006",]
 
-mapping_dunthorn <- tibble(Sample = rownames(otu_tab_dunthorn)) %>% mutate(Origin = if_else(grepl("^B", Sample), "Panama", if_else(grepl("^L", Sample), "Costa Rica", "Ecuador")))
+mapping_gp <- tibble(Sample = rownames(otu_tab_gp)) %>% mutate(Origin = if_else(grepl("^B", Sample), "Panama", if_else(grepl("^L", Sample), "Costa Rica", "Ecuador")))
 
 ```
 
@@ -37,30 +37,30 @@ mapping_dunthorn <- tibble(Sample = rownames(otu_tab_dunthorn)) %>% mutate(Origi
 ```{r}
 set.seed(20191107)
 
-dunthorn_run_file <- paste0(output_dir,"/run_dunthorn_varying.rds")
-if(!file.exists(dunthorn_run_file)) {
-  experiment_dunthorn_run <- run_mds_experiment(
-    otu_tab = otu_tab_dunthorn,
+gp_run_file <- paste0(output_dir,"/run_gp_varying.rds")
+if(!file.exists(gp_run_file)) {
+  experiment_gp_run <- run_mds_experiment(
+    otu_tab = otu_tab_gp,
     bootstrap_func = bootstrap_func_dm(20),
     n_observations_to_use_min = 15,
     n_observations_to_use_max = 60,
     n_steps = 100,
-    mapping = mapping_dunthorn,
+    mapping = mapping_gp,
     accept_subset_func = function(mapping_filtered) {
-                      group_counts <- mapping_filtered %>% group_by(Origin) %>% summarise(count = n())
+                      group_counts <- mapping_filtered %>% group_by(Origin) %>% summarise(count = n(), .groups = "drop")
                       nrow(group_counts) == 3 && all(group_counts$count > 2)
                    })
   
-  saveRDS(experiment_dunthorn_run, file = dunthorn_run_file)
+  saveRDS(experiment_gp_run, file = gp_run_file)
 } else {
-  experiment_dunthorn_run <- readRDS(file = dunthorn_run_file)
+  experiment_gp_run <- readRDS(file = gp_run_file)
 }
 ```
 
 ```{r}
-experiment_dunthorn <- eval_mds_experiment(experiment_dunthorn_run, Origin)
-experiment_dunthorn$per_point <- experiment_dunthorn$per_point %>% mutate(min_nobs = min(n_observations), n_observations_norm = (n_observations - min_nobs) / (max(n_observations) - min_nobs))
-experiment_dunthorn$global <- experiment_dunthorn$global %>% mutate(min_nobs = min(n_observations), n_observations_norm = (n_observations - min_nobs) / (max(n_observations) - min_nobs))
+experiment_gp <- eval_mds_experiment(experiment_gp_run, Origin)
+experiment_gp$per_point <- experiment_gp$per_point %>% mutate(min_nobs = min(n_observations), n_observations_norm = (n_observations - min_nobs) / (max(n_observations) - min_nobs))
+experiment_gp$global <- experiment_gp$global %>% mutate(min_nobs = min(n_observations), n_observations_norm = (n_observations - min_nobs) / (max(n_observations) - min_nobs))
 
 ```
 
@@ -85,55 +85,55 @@ my_plot <- function(data, x,y, color = NULL, shape = NULL, alpha = 1, group = 1)
 ```
 
 ```{r}
-#experiment_dunthorn$per_point %>% filter(step %in% c(81,sample(step, 5))) %>% my_plot(location, location_error, step, shape = factor(step))
-experiment_dunthorn$per_point %>% my_plot(location, location_error, n_observations)
-experiment_dunthorn$per_point %>% my_plot(distances, rmse_distances, n_observations)
-experiment_dunthorn$per_point %>% my_plot(angles, rmse_angles, n_observations)
+#experiment_gp$per_point %>% filter(step %in% c(81,sample(step, 5))) %>% my_plot(location, location_error, step, shape = factor(step))
+experiment_gp$per_point %>% my_plot(location, location_error, n_observations)
+experiment_gp$per_point %>% my_plot(distances, rmse_distances, n_observations)
+experiment_gp$per_point %>% my_plot(angles, rmse_angles, n_observations)
 ```
 
 ```{r}
-lm(location_error ~ location + n_observations_norm, data = experiment_dunthorn$per_point)
-lm(rmse_distances ~ distances + n_observations_norm, data = experiment_dunthorn$per_point)
-lm(rmse_angles ~ angles + n_observations_norm, data = experiment_dunthorn$per_point)
+lm(location_error ~ location + n_observations_norm, data = experiment_gp$per_point)
+lm(rmse_distances ~ distances + n_observations_norm, data = experiment_gp$per_point)
+lm(rmse_angles ~ angles + n_observations_norm, data = experiment_gp$per_point)
 ```
 
 
 ```{r}
-experiment_dunthorn$global %>% my_plot(n_observations, rmse_distances)
+experiment_gp$global %>% my_plot(n_observations, rmse_distances)
 
 ```
 
 ```{r}
-experiment_dunthorn$per_point %>% group_by(step, n_observations) %>% summarise(consistency_location = 1 - sqrt(sum((1 - location)^2) / (unique(n_observations) - 1))) %>%   inner_join(experiment_dunthorn$global %>% select(-consistency_location, -n_observations), by = c("step" = "step")) %>%
+experiment_gp$per_point %>% group_by(step, n_observations) %>% summarise(consistency_location = 1 - sqrt(sum((1 - location)^2) / (unique(n_observations) - 1)), .groups = "drop") %>%   inner_join(experiment_gp$global %>% select(-consistency_location, -n_observations), by = c("step" = "step")) %>%
   my_plot(consistency_location, rmse_location, n_observations)
 ```
 
 
 ```{r}
-experiment_dunthorn$global %>% my_plot(consistency_location, rmse_location, n_observations)
-experiment_dunthorn$global %>% my_plot(consistency_distances, rmse_distances, n_observations) 
-experiment_dunthorn$global %>% my_plot(consistency_angles, rmse_angles, n_observations) 
+experiment_gp$global %>% my_plot(consistency_location, rmse_location, n_observations)
+experiment_gp$global %>% my_plot(consistency_distances, rmse_distances, n_observations) 
+experiment_gp$global %>% my_plot(consistency_angles, rmse_angles, n_observations) 
 ```
 
 ```{r}
-lm(rmse_location ~ consistency_location, data = experiment_dunthorn$global)
-lm(rmse_location ~ consistency_location + n_observations_norm, data = experiment_dunthorn$global)
-lm(rmse_distances ~ consistency_distances, data = experiment_dunthorn$global)
-lm(rmse_distances ~ consistency_distances + n_observations_norm, data = experiment_dunthorn$global)
-lm(rmse_angles ~ consistency_angles, data = experiment_dunthorn$global)
-lm(rmse_angles ~ consistency_angles + n_observations_norm, data = experiment_dunthorn$global)
+lm(rmse_location ~ consistency_location, data = experiment_gp$global)
+lm(rmse_location ~ consistency_location + n_observations_norm, data = experiment_gp$global)
+lm(rmse_distances ~ consistency_distances, data = experiment_gp$global)
+lm(rmse_distances ~ consistency_distances + n_observations_norm, data = experiment_gp$global)
+lm(rmse_angles ~ consistency_angles, data = experiment_gp$global)
+lm(rmse_angles ~ consistency_angles + n_observations_norm, data = experiment_gp$global)
 
 ```
 
 
 ```{r}
-experiment_dunthorn$global %>% filter(consistency_location < 0.3)
-plot(experiment_dunthorn$sens_checks[[81]], color_aes = Origin, shape_aes = Origin)
+experiment_gp$global %>% filter(consistency_location < 0.3)
+plot(experiment_gp$sens_checks[[81]], color_aes = Origin, shape_aes = Origin)
 
 ```
 
 ```{r}
-test_mds <- metaMDS(experiment_dunthorn$step_results[[81]]$otu_tab_filtered, scaling = TRUE)
+test_mds <- metaMDS(experiment_gp$step_results[[81]]$otu_tab_filtered, scaling = TRUE)
 plot_mds(test_mds)
 test_mds
 test_mds$points %>% colMeans()
@@ -142,11 +142,11 @@ test_mds$points %>% colMeans() %>% rep(each = 10) %>% matrix(ncol = 2)
 
 
 ```{r}
-max(dist(experiment_dunthorn$sens_checks[[32]]$base_mds$points, method = "euclidean"))
-max(dist(experiment_dunthorn$sens_checks[[10]]$base_mds$points, method = "euclidean"))
-max(dist(experiment_dunthorn$sens_checks[[33]]$base_mds$points, method = "euclidean"))
-experiment_dunthorn$sens_checks[[10]]$base_mds$points ^ 2 %>% rowSums() %>% mean() %>% sqrt()
-experiment_dunthorn$sens_checks[[32]]$base_mds$points ^ 2 %>% rowSums() %>% mean() %>% sqrt()
+max(dist(experiment_gp$sens_checks[[32]]$base_mds$points, method = "euclidean"))
+max(dist(experiment_gp$sens_checks[[10]]$base_mds$points, method = "euclidean"))
+max(dist(experiment_gp$sens_checks[[33]]$base_mds$points, method = "euclidean"))
+experiment_gp$sens_checks[[10]]$base_mds$points ^ 2 %>% rowSums() %>% mean() %>% sqrt()
+experiment_gp$sens_checks[[32]]$base_mds$points ^ 2 %>% rowSums() %>% mean() %>% sqrt()
 
 ```
 
@@ -265,3 +265,42 @@ experiment_geel_jn$global %>% my_plot(consistency_angles, rmse_angles, n_observa
 
 ```
 
+
+## Phyloseq examples
+
+```{r}
+data("GlobalPatterns")
+GP = prune_taxa(taxa_sums(GlobalPatterns)>0, GlobalPatterns)
+mapping_gp <- GP@sam_data %>% as_tibble() %>% mutate(Sample = X.SampleID)
+otu_tab_gp <- as.matrix(t(GP@otu_table))
+```
+
+
+```{r}
+set.seed(20210211)
+
+gp_run_file <- paste0(output_dir,"/run_global_patterns_varying.rds")
+if(!file.exists(gp_run_file)) {
+  experiment_gp_run <- run_mds_experiment(
+    otu_tab = otu_tab_gp,
+    bootstrap_func = bootstrap_func_dm(20),
+    n_observations_to_use_min = 15,
+    n_observations_to_use_max = 20,
+    n_steps = 100,
+    mapping = mapping_gp,
+    accept_subset_func = function(mapping_filtered) {
+      TRUE
+                   })
+  
+  saveRDS(experiment_gp_run, file = gp_run_file)
+} else {
+  experiment_gp_run <- readRDS(file = gp_run_file)
+}
+```
+
+```{r}
+experiment_gp <- eval_mds_experiment(experiment_gp_run, 1)
+experiment_gp$per_point <- experiment_gp$per_point %>% mutate(min_nobs = min(n_observations), n_observations_norm = (n_observations - min_nobs) / (max(n_observations) - min_nobs))
+experiment_gp$global <- experiment_gp$global %>% mutate(min_nobs = min(n_observations), n_observations_norm = (n_observations - min_nobs) / (max(n_observations) - min_nobs))
+
+```
